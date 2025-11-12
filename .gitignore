@@ -9,7 +9,7 @@ temp_dir/*
 framework-docs/*
 notes/*
 paper/*
-kg-benchmark/*
+kg_benchmark/*
 
 #ignore
 gnn/*
