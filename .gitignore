@@ -1,0 +1,34 @@
+.vscode/
+*__pycache__/*
+
+# ignore all files in data directory
+data/*
+temp_dir/*
+
+# ignore docs
+framework-docs/*
+notes/*
+paper/*
+
+#ignore
+gnn/*
+
+# ignore all files in kg-benchmark/pkt_data/builds directory
+kg-benchmark/pkt/pkt_data/builds/*
+data/pkt/*
+find_everywhere.py
+webpagetext_scraper.py
+
+# ignore all files .owl .obo .tsv .nt .csv 
+*.owl
+*.obo
+*.tsv
+*.nt
+*.csv
+*.lnk
+*.zip
+*.gz
+
+# except for specific files
+!data\omics\metadata\TCGA_sample_type_codes.csv
+!data\pkt\metadata\LabelClassDataset_metadata.csv
