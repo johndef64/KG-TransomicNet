@@ -27,8 +27,9 @@ KG-TransomicNet integrates multi-omics data into a knowledge graph infrastructur
   - Somatic mutations
   - DNA methylation
   - Copy number variations
+  - miRNA expression
   - Proteomics
-  - Metabolomics
+
 - **ID Normalization**: Ensembl, Entrez, HGNC mappings
 - **Clinical Data**: Survival, treatment response
 
@@ -38,8 +39,8 @@ Multi-omics measurements are represented as properties of knowledge graph nodes:
 - Mutations → Gene/Protein nodes
 - Methylation → Gene/Promoter nodes
 - CNV → Gene/Chromosome region nodes
+- miRNA expression → miRNA nodes
 - Proteomics → Protein nodes
-- Metabolomics → Metabolite nodes
 
 ## Key Scripts
 
