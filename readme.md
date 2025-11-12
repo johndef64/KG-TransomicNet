@@ -59,6 +59,9 @@ The approach follows the **IRR (Information Representation and Reuse)** framewor
 - PheKnowLator dataset
 - TCGA data from Xena/cBioPortal
 
+## Versioning
+- Current Version: v0.0.1 (alpha)
+
 ## License
 
 [Add your license here]
