@@ -1,0 +1,20 @@
+Code,Sample Type,Description,Short Code
+01,Primary Solid Tumor,Primary solid tumor,TP
+02,Recurrent Solid Tumor,Recurrent solid tumor,TR
+03,Primary Blood Derived Cancer - Peripheral Blood,Primary hematologic cancer from peripheral blood,TB
+04,Primary Blood Derived Cancer - Bone Marrow,Primary hematologic cancer from bone marrow,TM
+05,Additional - New Primary Tumor Sample,Additional new primary tumor sample,NB
+06,Metastatic,Metastasis,MT
+07,Additional Metastatic,Additional metastasis,MB
+08,Human Tumor Original Cells,Human original tumor cells,TC
+09,Primary Xenograft Tissue,Primary xenograft tissue,XP
+10,Blood Derived Normal,Normal blood,NT
+11,Solid Tissue Normal,Normal solid tissue,NB
+12,Buccal Cell Normal,Normal buccal cells,BU
+13,EBV Immortalized Normal,EBV-immortalized normal cells,EB
+14,Bone Marrow Normal,Normal bone marrow,BM
+20,Control Analyte,Control analyte,CT
+40,Recurrent Blood Derived Cancer,Recurrent hematologic cancer,TRB
+50,Cell Lines,Cell lines,CL
+60,Primary Xenograft Cell Line,Primary xenograft cell line,XL
+61,Additional Xenograft Cell Line,Additional xenograft cell line,XL

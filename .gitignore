@@ -3,6 +3,7 @@
 
 # ignore all files in data directory
 data/*
+data/omics/TCGA*
 temp_dir/*
 
 # ignore docs
@@ -16,7 +17,18 @@ gnn/*
 
 # ignore all files in kg-benchmark/pkt_data/builds directory
 kg-benchmark/pkt/pkt_data/builds/*
-data/pkt/*
+data/pkt/builds/*
+#  specific files
+data/pkt/kg_ana*
+data/pkt/READ*
+data/pkt/pkt_onto*
+data/pkt/create_*
+data/pkt/kg_insig*
+
+# omics data structure files
+data/omics/data-structure/*
+data/omics/readme.md
+
 find_everywhere.py
 webpagetext_scraper.py
 
@@ -29,6 +41,14 @@ webpagetext_scraper.py
 *.lnk
 *.zip
 *.gz
+*.7z
+*.probemap
+*.url
+*.json
+
+# Tranne questa directory
+!data/omics/
+!data/pkt/
 
 # except for specific files
 !data\omics\metadata\TCGA_sample_type_codes.csv
