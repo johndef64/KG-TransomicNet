@@ -9,6 +9,7 @@ temp_dir/*
 framework-docs/*
 notes/*
 paper/*
+kg-benchmark/*
 
 #ignore
 gnn/*
@@ -24,7 +25,7 @@ webpagetext_scraper.py
 *.obo
 *.tsv
 *.nt
-*.csv
+#*.csv
 *.lnk
 *.zip
 *.gz
