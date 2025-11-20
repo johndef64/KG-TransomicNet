@@ -8,13 +8,13 @@ import sys, os
 import xml.etree.ElementTree as ET
 
 from  pkt_utils import *
-set_working_directory()
-print_file_contents(os.getcwd())
+# print_file_contents(os.getcwd())
 #%%
 
 # --- CONFIGURAZIONE ---
-pkt_file = "PKT.nt.tar.gz"
-node_label_file = "PKT_NodeLabels_with_metadata_v3.0.2.csv"
+pkt_build_dir = "../data/pkt/builds/v3.0.2/"
+pkt_file = f"{pkt_build_dir}PKT.nt.tar.gz"
+node_label_file = f"{pkt_build_dir}PKT_NodeLabels_with_metadata_v3.0.2.csv"
 output_dir = "../temp_dir/" # Assicurati che questa directory esista!
 os.makedirs(output_dir, exist_ok=True)
 
@@ -120,7 +120,7 @@ def get_entity_metadata(uri, metadata_lookup):
 
 # Caricamento dei dati
 print(f"Loading data from {pkt_file}...")
-pkt_kg = read_tar_rdf_csv(pkt_file)
+pkt_kg = read_tar_rdf(pkt_file)
 print(f"Loaded {len(pkt_kg)} RDF triples.")
 # Nota: La riga di campionamento è commentata, se i dati sono grandi potresti volerla decommentare
 # pkt_kg.sample(10000).to_csv(r'..\temp_dir\sample_10000.csv', index=False)
@@ -129,10 +129,29 @@ print(f"Loaded {len(pkt_kg)} RDF triples.")
 print(f"Loading NodeLabels from {node_label_file}...")
 NodeLabels = pd.read_csv(node_label_file)
 print(f"Loaded {len(NodeLabels)} NodeLabels.")
+import zipfile
 
-# Create metadata lookup from NodeLabels
-metadata_lookup = create_metadata_lookup(NodeLabels)
-#%%
+# if f"{output_dir}metadata_lookup.json" exists, then load it back
+if os.path.exists(f"{output_dir}metadata_lookup.json"):
+    # Load existing metadata lookup from the zip file wothout decompressing
+    with zipfile.ZipFile(f"{output_dir}metadata_lookup.zip", 'r') as zipf:
+        with zipf.open('metadata_lookup.json') as f:
+            metadata_lookup = json.load(f)
+    print(f"Loaded existing metadata lookup from {output_dir}metadata_lookup.zip")
+    
+else:
+    # Create metadata lookup from NodeLabels
+    metadata_lookup = create_metadata_lookup(NodeLabels)
+    # save metadatalookup as json in temp dir 
+    with open(f"{output_dir}metadata_lookup.json", 'w', encoding='utf-8') as f:
+        json.dump(metadata_lookup, f, indent=2, ensure_ascii=False)
+        # compess the json file in zip
+        print(f"Saved metadata lookup to {output_dir}metadata_lookup.json")
+        with zipfile.ZipFile(f"{output_dir}metadata_lookup.zip", 'w', zipfile.ZIP_DEFLATED) as zipf:
+            zipf.write(f"{output_dir}metadata_lookup.json", arcname="metadata_lookup.json")
+        # delete the uncompressed json file
+        os.remove(f"{output_dir}metadata_lookup.json")
+        print(f"Compressed metadata lookup to {output_dir}metadata_lookup.zip")
 
 #%%
 # Funzione per convertire RDF in formato Grafo di Proprietà
@@ -212,7 +231,6 @@ def convert_rdf_to_property_graph(df, metadata_lookup):
     return list(nodes.values()), edges
 
 # Esecuzione della conversione
-
 if USE_SAMPLE:
     sample_df = pkt_kg.sample(10000, random_state=42)
     nodes, edges = convert_rdf_to_property_graph(sample_df, metadata_lookup)

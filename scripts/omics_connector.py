@@ -58,7 +58,6 @@ TCGA_STUDIES = [
     "TCGA-UCS",   # Uterine Carcinosarcoma
 ]
 
-
 DATA_TYPES = [
     "gene-level_ascat3",       # Copy Number (Gene Level)
     "allele_cnv_ascat3",       # Allele-specific Copy Number Segment
@@ -76,14 +75,6 @@ DATA_TYPES = [
 
 GDC_ROOT_URL = "https://gdc-hub.s3.us-east-1.amazonaws.com/download/"
 
-
-
-
-study = "TCGA-BRCA"
-data_type = "gene-level_ascat3"
-STUDY_URL = f"{GDC_ROOT_URL}{study}.{data_type}.tsv.gz"
-METADATA_URL = f"{GDC_ROOT_URL}{study}.{data_type}.tsv.json"
-
 PROBEMAP_URLS = [
     # gene code annotation files
     f"{GDC_ROOT_URL}gencode.v36.annotation.gtf.gene.probemap",
@@ -92,7 +83,12 @@ PROBEMAP_URLS = [
     f"{GDC_ROOT_URL}HM27.hg38.manifest.gencode.v36.probeMap",
 ]
 
-# get all data_types for the TCGA-n study 
+# study = "TCGA-BRCA"
+# data_type = "gene-level_ascat3"
+# STUDY_URL = f"{GDC_ROOT_URL}{study}.{data_type}.tsv.gz"
+# METADATA_URL = f"{GDC_ROOT_URL}{study}.{data_type}.tsv.json"
+
+
 # get all data_types for the TCGA-n study 
 def get_tcga_data_types(study_name):
     """
@@ -177,7 +173,6 @@ def get_tcga_data_types(study_name):
         for dt in missing_files:
             print(f"  - {dt}")
 
-
 def get_all_probe_map(output_dir):
     """
     Download all probe map files.
@@ -217,6 +212,63 @@ def get_all_probe_map(output_dir):
     
     print(f"\n{'='*60}\n")
 
+#### OMICS DATA Manipulation Functions
+
+STUDY = "TCGA-BRCA"
+ROOT_PATH = f"../data/omics/{STUDY}/"
+ROOT_MAPS = f"../data/omics/maps/"
+
+PROBEMAP_PATHS = [
+    # gene code annotation files
+    f"{ROOT_MAPS}gencode.v36.annotation.gtf.gene.probemap",
+    # methylation probe map files
+    f"{ROOT_MAPS}HM450.hg38.manifest.gencode.v36.probeMap",
+    f"{ROOT_MAPS}HM27.hg38.manifest.gencode.v36.probeMap",
+]
+
+OMICS_PATHS = {
+    data_type: f"{ROOT_PATH}{STUDY}.{data_type}.tsv.gz"
+    for data_type in DATA_TYPES
+}
+METADATA_PATHS = {
+    data_type: f"{ROOT_PATH}{STUDY}.{data_type}.tsv.json"
+    for data_type in DATA_TYPES
+}
+OMICS_PATHS
+
+def print_df_heads():
+    """Print the heads of all omics dataframes for the selected study.
+    print jys forst 5 columns and first 3 rows of each dataframe.
+    """
+    for data_type, file_path in OMICS_PATHS.items():
+        if os.path.exists(file_path):
+            print(f"\nData Type: {data_type}")
+            df = pd.read_csv(file_path, sep='\t', compression='gzip', low_memory=False, nrows=3)
+            # print(f"Stats: {df.shape[0]} rows x {df.shape[1]} columns")
+            print(df.iloc[:3, :5])  # print first 5 columns and first 3 rows
+
+        else:
+            print(f"\nData Type: {data_type} - File not found: {file_path}")
+
+def read_data_type(data_type):
+    """Read a specific omics data type dataframe for the selected study."""
+    file_path = OMICS_PATHS.get(data_type)
+    if file_path and os.path.exists(file_path):
+        df = pd.read_csv(file_path, sep='\t', compression='gzip', low_memory=False)
+        return df
+    else:
+        print(f"File not found for data type {data_type}: {file_path}")
+        return None
+#%%
+def make_mirna_hgcn_map():
+    mirna_df = read_data_type("mirna")
+    """Make maps for mirnaid to HGCNc gene symbol"""
+    mirna_df["hgcn_id"] = mirna_df["miRNA_ID"].str.replace("hsa-mir-", "MIR").str.replace("hsa-let-", "MIRLET")
+    # make al letter uppercase
+    mirna_df["hgcn_id"] = mirna_df["hgcn_id"].str.upper()
+    maps = mirna_df[["hgcn_id", "miRNA_ID"]]
+    maps.to_csv(f"{ROOT_MAPS}mirna_hgcn_map.tsv", sep='\t', index=False)
+    return maps
 
 #%%
 

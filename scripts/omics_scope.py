@@ -35,3 +35,54 @@ for i in set(sample_types.values()):
     descriptinion = sample_type_codes[sample_type_codes['Code'] == int(i)]['Sample Type'].values
 
     print(f"Sample Type {i}: {list(sample_types.values()).count(i)} samples, type: {descriptinion}")
+
+
+#%% --------------------------------------------------------------------------
+from omics_connector import read_data_type, PROBEMAP_PATHS
+
+# print_df_heads()
+DATA_TYPES = [
+    "gene-level_ascat3",       # Copy Number (Gene Level)
+    "allele_cnv_ascat3",       # Allele-specific Copy Number Segment
+    #"methylation450",          # DNA Methylation - Illumina Human Methylation
+    "methylation27",           # DNA Methylation - Illumina Human Methylation
+    "somaticmutation_wxs",     # Somatic Mutation
+    "mirna",                   # miRNA Expression
+    "star_counts",             # Gene Expression (STAR - counts)
+    "star_fpkm",               # Gene Expression (STAR - FPKM)
+    "star_tpm",                # Gene Expression (STAR - TPM)
+    "protein",                 # Protein Expression
+    "clinical",                # Clinical Data
+    "survival",                # Survival Data
+]
+df= read_data_type(DATA_TYPES[5])
+print(df.columns)
+df
+
+#%%
+df.Ensembl_ID.nunique()
+df["Ensembl_ID_nover"] = df["Ensembl_ID"].str.split('.').str[0]
+df["Ensembl_ID_nover"].nunique()
+
+#%%
+gene_mappings = pd.read_csv(PROBEMAP_PATHS[0], sep='\t')
+gene_mappings.gene.nunique()
+
+# count only gene that ends with "P"
+number_of_pseudo = gene_mappings[gene_mappings['gene'].str.endswith('P')].gene.nunique()   
+print(f"Number of pseudo genes: {number_of_pseudo}")
+
+
+# count only gene that starts with "MIR"
+number_of_mirna = gene_mappings[gene_mappings['gene'].str.startswith('MIR')].gene.nunique()   
+print(f"Number of miRNA genes: {number_of_mirna}")
+
+# count only gene that contains with "."
+number_of_genes_with_dot = gene_mappings[gene_mappings['gene'].str.contains('\.')].gene.nunique()
+print(f"Number of genes containing '.': {number_of_genes_with_dot}")
+
+
+gene_mappings["gene_nodot"] = gene_mappings["gene"].str.split('.').str[0]
+genenodot_num = gene_mappings["gene_nodot"].nunique()
+print(f"Number of unique genes without dot: {genenodot_num}")
+#%%
