@@ -778,6 +778,186 @@ for col in ['entrez_id', 'hgnc_symbol', 'uniprot_swissprot_id', 'reactome', 'mir
         non_null = master_gene_mappings[col].notna().sum()
         print(f"  {col}: {non_null}/{len(master_gene_mappings)} ({non_null/len(gene_mappings_full)*100:.1f}%)")
 
+#%%%
+##### VARIANT ANNOTATIONS FROM BIOMART
+
+# get all datasets avalible list
+from pybiomart import Server
+server = Server(host='http://www.ensembl.org')
+datasets = server.marts['ENSEMBL_MART_SNP'].datasets
+for dataset_name in datasets:
+    if dataset_name.startswith('hsapiens'):
+        print(f"- {dataset_name}")
+
+# load dataset : hsapiens_snp
+hsapiens_snp_dataset = datasets['hsapiens_snp']
+
+hsapiens_snp_dataset.attributes.keys()
+
+attrs = ['refsnp_id', 'refsnp_source', 'refsnp_source_description', 'chr_name', 'chrom_start', 'chrom_end', 'chrom_strand', 'allele',]
+
+snp21 = hsapiens_snp_dataset.query(attributes=attrs,
+    filters={'chr_name': ['21']}    )
+snp21
+#%%
+#%%
+hsapiens_snp_dataset.filters.keys()
 
 
 #%%
+hsapiens_snp_som_dataset = datasets['hsapiens_snp_som']
+
+hsapiens_snp_som_dataset.attributes.keys()
+
+attrs = ['refsnp_id', 'refsnp_source', 'refsnp_source_description', 'chr_name', 'chrom_start', 'chrom_end', 'chrom_strand', 'allele',]
+
+snpsom21 = hsapiens_snp_som_dataset.query(attributes=attrs,
+    filters={'chr_name': ['21']}    )
+snpsom21
+
+#%%
+
+# CREARE VARIANT MAPPINGS DA VARIANT DB
+variant_mappings = somatic_dataset.query(attributes=[
+    'refsnp_id', 
+    'refsnp_source', 
+    'refsnp_source_description', 
+    'chr_name', 
+    'chrom_start', 
+    'chrom_end', 
+    'chrom_strand', 
+    'allele'
+    ],
+    filters={'chr_name': ['21']}
+    )
+variant_mappings
+#%%
+
+#%%
+
+#%%
+import requests
+
+rsids = ['rs121913529']#, 'rs121913530', 'rs121913531']
+
+for rsid in rsids:
+    url = f"https://clinicaltables.nlm.nih.gov/api/snps/v3/search?terms={rsid}&ef=38.chr,38.pos,38.alleles,38.gene,37.chr,37.pos,37.alleles,37.gene"
+    response = requests.get(url)
+    data = response.json()
+    print(f"{rsid}: {data}")
+
+
+pd.DataFrame(data[2])
+
+#%%
+#   fallo per tutti gli rsid in PKT
+# load PKT file
+path = "../data/pkt/builds/v3.0.2/PKT_NodeLabels_with_metadata_v3.0.2.csv"
+pkt_df = pd.read_csv(path)
+pkt_df.head()
+
+# get all "entity" for class_code == "dbSNP"
+rsids = pkt_df[pkt_df['class_code'] == 'dbSNP']['entity'].unique().tolist()
+print(f"Total rsids in PKT: {len(rsids)}")
+#%%
+
+
+import requests
+from tqdm import tqdm
+
+# rsids_ = ['rs121913529', "rs121913530",]
+mater_rs_df = pd.DataFrame()
+
+for rsid in tqdm(rsids):
+    # url = f"https://clinicaltables.nlm.nih.gov/api/snps/v3/search?terms={rsid}&ef=38.chr,38.pos,38.alleles,38.gene"
+    url = f"https://clinicaltables.nlm.nih.gov/api/snps/v3/search?terms={rsid}&q=rsNum:{rsid}&ef=38.chr,38.pos,38.alleles,38.gene"
+    response = requests.get(url)
+    data = response.json()
+    # print(f"{rsid}: {data}")
+
+    # convert to dataframe
+    df_rs = pd.DataFrame(data[2])
+    df_rs["snp_id"] = rsid
+    # move snp_id to first column
+    cols = df_rs.columns.tolist()
+    cols = ['snp_id'] + [col for col in cols if col != 'snp_id']
+    df_rs = df_rs[cols]
+
+    # concat to master
+    mater_rs_df = pd.concat([mater_rs_df, df_rs], ignore_index=True)
+
+
+mater_rs_df
+
+#%% multi thread multi user
+
+import requests
+import pandas as pd
+from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+def fetch_rsid_data(rsid, session):
+    """Fetch data for a single rsID using a shared session."""
+    url = f"https://clinicaltables.nlm.nih.gov/api/snps/v3/search?terms={rsid}&q=rsNum:{rsid}&ef=38.chr,38.pos,38.alleles,38.gene"
+    
+    try:
+        response = session.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Convert to dataframe
+        if data[0] > 0:  # Check if results exist
+            df_rs = pd.DataFrame(data[2])
+            df_rs["snp_id"] = rsid
+            # Move snp_id to first column
+            cols = ['snp_id'] + [col for col in df_rs.columns if col != 'snp_id']
+            df_rs = df_rs[cols]
+            return df_rs
+        else:
+            # Return empty dataframe with snp_id if no results
+            return pd.DataFrame({'snp_id': [rsid]})
+    except Exception as e:
+        print(f"Error fetching {rsid}: {e}")
+        return pd.DataFrame({'snp_id': [rsid], 'error': [str(e)]})
+
+def fetch_multiple_rsids(rsids, max_workers=10):
+    """Fetch data for multiple rsIDs using multithreading."""
+    
+    # Create a session with connection pooling
+    session = requests.Session()
+    adapter = requests.adapters.HTTPAdapter(
+        pool_connections=max_workers,
+        pool_maxsize=max_workers
+    )
+    session.mount('https://', adapter)
+    session.mount('http://', adapter)
+    
+    results = []
+    
+    # Use ThreadPoolExecutor for concurrent requests
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_rsid = {
+            executor.submit(fetch_rsid_data, rsid, session): rsid 
+            for rsid in rsids
+        }
+        
+        # Process completed tasks with progress bar
+        for future in tqdm(as_completed(future_to_rsid), total=len(rsids)):
+            rsid = future_to_rsid[future]
+            try:
+                df_result = future.result()
+                results.append(df_result)
+            except Exception as e:
+                print(f"Exception for {rsid}: {e}")
+                results.append(pd.DataFrame({'snp_id': [rsid], 'error': [str(e)]}))
+    
+    # Concatenate all results
+    master_rs_df = pd.concat(results, ignore_index=True)
+    
+    return master_rs_df
+
+# Usage
+# rsids = ['rs121913529', 'rs121913530', 'rs121913531']
+master_rs_df = fetch_multiple_rsids(rsids, max_workers=10)
+master_rs_df

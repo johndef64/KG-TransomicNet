@@ -55,10 +55,15 @@ DATA_TYPES = [
     "clinical",                # Clinical Data
     "survival",                # Survival Data
 ]
-df= read_data_type(DATA_TYPES[5])
+df= read_data_type(DATA_TYPES[3])
 print(df.columns)
-df
 
+
+# show csv of forst 3 rows and first 2 columns
+print(df.iloc[:4, :3])
+df.head(3).T.to_dict()
+#%%
+df.head(3).T.to_dict()
 #%%
 df.Ensembl_ID.nunique()
 df["Ensembl_ID_nover"] = df["Ensembl_ID"].str.split('.').str[0]
