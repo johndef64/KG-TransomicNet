@@ -148,7 +148,7 @@ def load_omics_metadata(data_type):
 
 load_omics_metadata("star_tpm")
 
-#%% --------------------------------------------------------------------------
+#%% ---------------------------------------------------------------
  # LOAD all MAPPINGS
 ROOT_MAPS
 
@@ -180,6 +180,9 @@ mapping_dfs['bimart_genes_map'].head()
 #%%
 
 ##  --- Load to ARANGODB collections ---
+
+# Ad ognuno anda aggiunta la chiave epr il mapping con il KNOWLEDGE GRAPH !
+
 # 1. Collezione PROJECTS (una per progetto TCGA)
 # data_source : "clinical"
 
