@@ -638,9 +638,6 @@ gene_mappings
 # 'mirbase_accession', etc
 
 
-
-# ...existing code...
-
 #%%
 # Compose comprehensive gene mappings with BioMart annotations
 # Split external annotations into batches of 3 and merge results
@@ -663,7 +660,6 @@ external_batches = [
     ['entrezgene_id', 'hgnc_symbol', 'mirbase_id'],
     # ['mirbase_accession']
     # ['reactome', 'reactome_gene'],
-
     # [ 'uniprot_gn_id'], # 'uniprot_gn_symbol'
     ['uniprotswissprot', 'uniprot_isoform' ] # "uniprotsptrembl"
 ]
@@ -734,7 +730,7 @@ columns_dict = {
 }
 # replace column name and save as new file
 master_gene_mappings.rename(columns=columns_dict, inplace=True)
-master_gene_mappings.to_csv("../data/omics/maps/biomart_gene_mappings_renamed.tsv", sep='\t', index=False)
+master_gene_mappings.to_csv("../data/omics/maps/biomart_gene_mappings.tsv", sep='\t', index=False)
 #%%
 chr2 = get_biomart_annotations("2")
 chr2.to_csv("../data/omics/maps/biomart_gene_mappings_chr2_alluniprot.tsv", sep='\t', index=False)
