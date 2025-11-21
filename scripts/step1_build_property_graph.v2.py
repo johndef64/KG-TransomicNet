@@ -6,6 +6,7 @@ from collections import defaultdict
 from urllib.parse import urlparse
 import sys, os
 import xml.etree.ElementTree as ET
+from tqdm import tqdm
 
 from  pkt_utils import *
 # print_file_contents(os.getcwd())
@@ -19,6 +20,12 @@ output_dir = "../temp_dir/" # Assicurati che questa directory esista!
 os.makedirs(output_dir, exist_ok=True)
 
 USE_SAMPLE = True # Usa un campione di 10.000 triple per il test rapido
+if USE_SAMPLE:
+    print("USING SAMPLE OF 10,000 TRIPLES FOR TESTING PURPOSES")
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")    
+    output_dir = f"../temp_dir/sample{timestamp}/"
+
 
 """ 
 PKT RDF triples preview:
@@ -115,9 +122,9 @@ def get_entity_metadata(uri, metadata_lookup):
             'source_type': 'unknown',
             'integer_id': None
         }
-
+  
 # --- ESTRAZIONE E CONVERSIONE ---
-
+#%%
 # Caricamento dei dati
 print(f"Loading data from {pkt_file}...")
 pkt_kg = read_tar_rdf(pkt_file)
@@ -126,20 +133,24 @@ print(f"Loaded {len(pkt_kg)} RDF triples.")
 # pkt_kg.sample(10000).to_csv(r'..\temp_dir\sample_10000.csv', index=False)
 # pkt_kg = pd.read_csv(r'..\temp_dir\sample_10000.csv')
 #%%
-print(f"Loading NodeLabels from {node_label_file}...")
-NodeLabels = pd.read_csv(node_label_file)
-print(f"Loaded {len(NodeLabels)} NodeLabels.")
-import zipfile
+
 
 # if f"{output_dir}metadata_lookup.json" exists, then load it back
-if os.path.exists(f"{output_dir}metadata_lookup.json"):
+metadata_lookup_path = f"../temp_dir/metadata_lookup.json"
+if os.path.exists(metadata_lookup_path):
+    print(f"Loading existing metadata lookup from {metadata_lookup_path}...")
     # Load existing metadata lookup from the zip file wothout decompressing
-    with zipfile.ZipFile(f"{output_dir}metadata_lookup.zip", 'r') as zipf:
+    with zipfile.ZipFile(f"../temp_dir/metadata_lookup.zip", 'r') as zipf:
         with zipf.open('metadata_lookup.json') as f:
             metadata_lookup = json.load(f)
-    print(f"Loaded existing metadata lookup from {output_dir}metadata_lookup.zip")
+    print(f"Loaded existing metadata lookup from {metadata_lookup_path}")
     
 else:
+    print(f"Loading NodeLabels from {node_label_file}...")
+    NodeLabels = pd.read_csv(node_label_file)
+    print(f"Loaded {len(NodeLabels)} NodeLabels.")
+    import zipfile
+
     # Create metadata lookup from NodeLabels
     metadata_lookup = create_metadata_lookup(NodeLabels)
     # save metadatalookup as json in temp dir 
@@ -232,6 +243,7 @@ def convert_rdf_to_property_graph(df, metadata_lookup):
 
 # Esecuzione della conversione
 if USE_SAMPLE:
+    print("Using sample of 10,000 triples for conversion...")
     sample_df = pkt_kg.sample(10000, random_state=42)
     nodes, edges = convert_rdf_to_property_graph(sample_df, metadata_lookup)
 else:
@@ -264,6 +276,8 @@ for edge_type, count in sorted(edge_types.items(), key=lambda x: x[1], reverse=T
 def export_to_json_for_arangodb(nodes, edges, output_dir):
     """Export property graph to JSON format compatible with ArangoDB's import utility"""
     
+    os.makedirs(output_dir, exist_ok=True)
+
     # 1. Esportare nodi separatamente (già con _key)
     with open(f"{output_dir}nodes.json", 'w', encoding='utf-8') as f:
         # ArangoDB può importare un array di JSON. dump è sufficiente.

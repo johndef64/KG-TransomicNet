@@ -3,7 +3,7 @@ from sqlalchemy import null
 from arangodb_utils import *
 import pandas as pd
 # --- FUNZIONI DI BASE DI ARANGODB ---
-db_connection = setup_arangodb_connection()
+db_connection = setup_arangodb_connection("PKT_test10000")
 
 # funzioni per caricare multi omics datasets
 TCGA_STUDIES = [
@@ -103,10 +103,96 @@ def read_data_type(data_type):
         print(f"File not found for data type {data_type}: {file_path}")
         return None
     
+# Load PKT NODELABELS
+pkt_nodelabels_path = "../data/pkt/builds/v3.0.2/PKT_NodeLabels_with_metadata_v3.0.2.csv"
+pkt_nodelabels = pd.read_csv(pkt_nodelabels_path, dtype=str)
+pkt_nodelabels
+#%%
+pkt_nodelabels['bioentity_type'].value_counts()
+"""
+in teoria potrei mappare su PKT
+bioentity_type:
+- gene --> entrez_id
+- protein --> uniprot_id
+- variant --> rsid
+- disease --> mondo_id
+- phenotype --> hp_id
+"""
+
+# serch in db_connection for collection "nodes"in nodes containing "tumor or cancer ion labels"
+get_nodes_by_pattern(db_connection, "nodes", "label", "%tumor%")
+#%%
+nodes = get_nodes_by_pattern(db_connection, "nodes", "class_code", "%HP%")
+print(f"Found {len(nodes)} nodes with class_code containing 'HP'")
+# example of nodes properties
+for node in nodes[:5]:
+    for key, value in node.items():
+        print(f"{key}: {value}")
+    print("-----")
+
+#%%
+# serch "vital" in HP labels
+nodes_query = get_nodes_by_pattern(db_connection, "nodes", "label", "% female%")
+for n in nodes_query:
+    print(f"{n['class_code']}: {n['label']}")
+#%%
+# volgio codice python per creare diversi datasets salvati in csv che risolvono la struttura nested di clinica_df 
+clinical_df = read_data_type("clinical")
+def make_clinical_sub_df(clinical_df, suffix):
+    # la prima colonna di sub_df deve essere sempre case_id
+    """Create a sub-dataframe from clinical_df based on column suffix."""
+    sub_df = clinical_df[[col for col in clinical_df.columns if col.endswith(suffix)]]
+    sub_df.insert(0, 'sample', clinical_df['sample'])
+    # remove the suffix from column names
+    sub_df.columns = [col.replace(f".{suffix}", "") for col in sub_df.columns]
+    return sub_df
+
+df_tissue_source_site = make_clinical_sub_df(clinical_df, 'tissue_source_site')
+df_diagnoses = make_clinical_sub_df(clinical_df, 'diagnoses')
+df_demographic = make_clinical_sub_df(clinical_df, 'demographic')
+df_annotations = make_clinical_sub_df(clinical_df, 'annotations')
+df_project = make_clinical_sub_df(clinical_df, 'project')
+df_samples = make_clinical_sub_df(clinical_df, 'samples')
+df_project
+#%%
+
+disease_types = {'Squamous Cell Neoplasms', 'Adnexal and Skin Appendage Neoplasms', 'Epithelial Neoplasms, NOS', 'Complex Epithelial Neoplasms', 'Fibroepithelial Neoplasms', 'Cystic, Mucinous and Serous Neoplasms', 'Basal Cell Neoplasms', 'Adenomas and Adenocarcinomas', 'Ductal and Lobular Neoplasms'}
+# il tuo compito è fare una ricerca per ogni termine e darmi il mapping con l'id dell'ontologia MONDO per ognuno di essi, che sia corretto, lo volgio in un json
+
+mondo_mapping = {
+  "Squamous Cell Neoplasms": "MONDO:0002532",
+  "Adnexal and Skin Appendage Neoplasms": "MONDO:0002297",
+  "Epithelial Neoplasms, NOS": "MONDO:0005626",
+  "Complex Epithelial Neoplasms": "MONDO:0005626",
+  "Fibroepithelial Neoplasms": "MONDO:0021045",
+  "Cystic, Mucinous and Serous Neoplasms": "MONDO:0006720",
+  "Basal Cell Neoplasms": "MONDO:0020799",
+  "Adenomas and Adenocarcinomas":  "MONDO:0004972|MONDO:0004970",
+  "Ductal and Lobular Neoplasms": 
+  "MONDO:0004953|MONDO:0002486"
+#   }
+}
+mondo_ids = mondo_mapping.values()
+
+for id in mondo_ids:
+    id = id.replace(":", "_")
+    id = id.split('|')[0]  # take first id only
+    nodes_query = get_nodes_by_pattern(db_connection, "nodes", "_key", f"{id}")
+    for n in nodes_query:
+        if n['class_code'] == "MONDO":
+            print(f"{n['class_code']}: {n['label']}")
+
+# for dt in disease_types:
+#     dt = dt.split(',')[0]  # take first word only
+#     dt = dt.rstrip('s')  
+#     nodes_query = get_nodes_by_pattern(db_connection, "nodes", "label", f"%{dt}%")
+#     for n in nodes_query:
+#         print(f"{n['class_code']}: {n['label']}")
+
 #%%
 # from omics_connector import make_mirna_hgcn_map
 # make_mirna_hgcn_map()
-
+pkt_nodelabels[pkt_nodelabels['bioentity_type'] == "sequence"].class_code.value_counts()
 # %%
 # print working directory
 import os
@@ -188,50 +274,6 @@ mapping_dfs['bimart_genes_map'].head()
 
 clinical_df = read_data_type("clinical")
 
-clinical_df_columns = ['sample', 'id', 'disease_type', 'case_id', 'submitter_id',
-       'primary_site', 'alcohol_history.exposures', 'race.demographic',
-       'gender.demographic', 'ethnicity.demographic',
-       'vital_status.demographic', 'age_at_index.demographic',
-       'days_to_birth.demographic', 'year_of_birth.demographic',
-       'year_of_death.demographic', 'primary_site.project',
-       'project_id.project', 'disease_type.project', 'name.project',
-       'name.program.project', 'tissue_source_site_id.tissue_source_site',
-       'code.tissue_source_site', 'name.tissue_source_site',
-       'project.tissue_source_site', 'bcr_id.tissue_source_site',
-       'days_to_death.demographic', 'entity_submitter_id.annotations',
-       'notes.annotations', 'submitter_id.annotations',
-       'classification.annotations', 'entity_id.annotations',
-       'created_datetime.annotations', 'annotation_id.annotations',
-       'entity_type.annotations', 'updated_datetime.annotations',
-       'case_id.annotations', 'state.annotations', 'category.annotations',
-       'status.annotations', 'case_submitter_id.annotations',
-       'synchronous_malignancy.diagnoses', 'ajcc_pathologic_stage.diagnoses',
-       'days_to_diagnosis.diagnoses', 'last_known_disease_status.diagnoses',
-       'tissue_or_organ_of_origin.diagnoses',
-       'days_to_last_follow_up.diagnoses', 'age_at_diagnosis.diagnoses',
-       'primary_diagnosis.diagnoses', 'prior_malignancy.diagnoses',
-       'year_of_diagnosis.diagnoses', 'prior_treatment.diagnoses',
-       'ajcc_staging_system_edition.diagnoses', 'ajcc_pathologic_t.diagnoses',
-       'morphology.diagnoses', 'ajcc_pathologic_n.diagnoses',
-       'ajcc_pathologic_m.diagnoses', 'classification_of_tumor.diagnoses',
-       'icd_10_code.diagnoses', 'site_of_resection_or_biopsy.diagnoses',
-       'tumor_grade.diagnoses', 'progression_or_recurrence.diagnoses',
-       'age_at_earliest_diagnosis.diagnoses.xena_derived',
-       'age_at_earliest_diagnosis_in_years.diagnoses.xena_derived',
-       'treatment_id.treatments.diagnoses',
-       'submitter_id.treatments.diagnoses',
-       'treatment_type.treatments.diagnoses',
-       'treatment_or_therapy.treatments.diagnoses',
-       'created_datetime.treatments.diagnoses',
-       'updated_datetime.treatments.diagnoses', 'state.treatments.diagnoses',
-       'sample_type_id.samples', 'tumor_descriptor.samples',
-       'sample_id.samples', 'sample_type.samples', 'composition.samples',
-       'days_to_collection.samples', 'initial_weight.samples',
-       'preservation_method.samples', 'pathology_report_uuid.samples',
-       'oct_embedded.samples', 'specimen_type.samples',
-       'days_to_sample_procurement.samples', 'is_ffpe.samples',
-       'tissue_type.samples', 'annotations.samples']
-
 clinical_df.disease_type.unique()
 
 #%%
@@ -268,7 +310,7 @@ PROJECT_load = {
     "name": clinical_df.loc[0, 'name.project'],
     "program": clinical_df.loc[0, 'name.program.project'],
     "primary_site": clinical_df.loc[0, 'primary_site.project'],
-    "disease_type": ast.literal_eval(clinical_df.loc[0, 'disease_type.project'])
+    "disease_types": ast.literal_eval(clinical_df.loc[0, 'disease_type.project'])
 }
 PROJECT_load
 #%%
@@ -307,10 +349,13 @@ for key in SAMPLES_keys:
 
 SAMPLES_load = {
     "_key": clinical_df.loc[0, 'sample'],
-    "case_id": clinical_df.loc[0, 'case_id'],
-    "sample_id": clinical_df.loc[0, 'sample_id.samples'],
+    "submitter_id": clinical_df.loc[0, 'submitter_id'],
+    "tcga_project": clinical_df.loc[0, 'project_id.project'],
+    # "case_id": clinical_df.loc[0, 'case_id'],
+    # "sample_id": clinical_df.loc[0, 'sample_id.samples'],
     "sample_type": clinical_df.loc[0, 'sample_type.samples'],
     "sample_type_id": clinical_df.loc[0, 'sample_type_id.samples'],
+    # "disease_type": clinical_df.loc[0, 'disease_type'],
     "tumor_descriptor": clinical_df.loc[0, 'tumor_descriptor.samples'],
     "specimen_type": clinical_df.loc[0, 'specimen_type.samples'],
     "tissue_type": clinical_df.loc[0, 'tissue_type.samples'],
@@ -320,9 +365,9 @@ SAMPLES_load = {
     "is_ffpe": clinical_df.loc[0, 'is_ffpe.samples'],
     "initial_weight": clinical_df.loc[0, 'initial_weight.samples'],
     "days_to_collection": clinical_df.loc[0, 'days_to_collection.samples'],
-    "days_to_sample_procurement": clinical_df.loc[0, 'days_to_sample_procurement.samples'],
+    # "days_to_sample_procurement": clinical_df.loc[0, 'days_to_sample_procurement.samples'],
     "pathology_report_uuid": clinical_df.loc[0, 'pathology_report_uuid.samples'],
-    "annotations": clinical_df.loc[0, 'annotations.samples'],
+    # "annotations": clinical_df.loc[0, 'annotations.samples'],
 }
 SAMPLES_load
 #%% --------------------------------------------------------------------------
@@ -432,9 +477,10 @@ for key in CASES_keys_nestes_with_dot:
         print(f"{key}: NOT FOUND in clinical_df columns")
 
 CASES_load = {
-    "_key": clinical_df.loc[0, 'case_id'],
-    "id": clinical_df.loc[0, 'id'],
-    "submitter_id": clinical_df.loc[0, 'submitter_id'],
+    # "_key": clinical_df.loc[0, 'case_id'],
+    "_key": clinical_df.loc[0, 'submitter_id'],
+    # "id": clinical_df.loc[0, 'id'],
+    # "submitter_id": clinical_df.loc[0, 'submitter_id'],
     "tcga_project": clinical_df.loc[0, 'project_id.project'],
     "primary_site": clinical_df.loc[0, 'primary_site'],
     "disease_type": clinical_df.loc[0, 'disease_type'],
@@ -490,13 +536,13 @@ CASES_load = {
         "alcohol_history": clinical_df.loc[0, 'alcohol_history.exposures']
     },
     
-    "tissue_source_site": {
-        "id": clinical_df.loc[0, 'tissue_source_site_id.tissue_source_site'],
-        "code": clinical_df.loc[0, 'code.tissue_source_site'],
-        "name": clinical_df.loc[0, 'name.tissue_source_site'],
-        "project": clinical_df.loc[0, 'project.tissue_source_site'],
-        "bcr_id": clinical_df.loc[0, 'bcr_id.tissue_source_site']
-    }
+    # "tissue_source_site": {
+    #     "id": clinical_df.loc[0, 'tissue_source_site_id.tissue_source_site'],
+    #     "code": clinical_df.loc[0, 'code.tissue_source_site'],
+    #     "name": clinical_df.loc[0, 'name.tissue_source_site'],
+    #     "project": clinical_df.loc[0, 'project.tissue_source_site'],
+    #     "bcr_id": clinical_df.loc[0, 'bcr_id.tissue_source_site']
+    # }
 }
 CASES_load
 

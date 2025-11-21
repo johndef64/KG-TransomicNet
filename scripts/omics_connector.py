@@ -270,6 +270,25 @@ def make_mirna_hgcn_map():
     maps.to_csv(f"{ROOT_MAPS}mirna_hgcn_map.tsv", sep='\t', index=False)
     return maps
 
+def make_clinical_sub_df(clinical_df, suffix):
+    # la prima colonna di sub_df deve essere sempre case_id
+    """Create a sub-dataframe from clinical_df based on column suffix."""
+    sub_df = clinical_df[[col for col in clinical_df.columns if col.endswith(suffix)]]
+    sub_df.insert(0, 'sample', clinical_df['sample'])
+    # sub_df = clinical_df[[col for col in clinical_df.columns if col.endswith(suffix)]]
+    # remove the suffix from column names
+    sub_df.columns = [col.replace(f".{suffix}", "") for col in sub_df.columns]
+    return sub_df
+
+clinical_df = read_data_type("clinical")   
+df_tissue_source_site = make_clinical_sub_df(clinical_df, 'tissue_source_site')
+df_diagnoses = make_clinical_sub_df(clinical_df, 'diagnoses')
+df_demographic = make_clinical_sub_df(clinical_df, 'demographic')
+df_annotations = make_clinical_sub_df(clinical_df, 'annotations')
+df_project = make_clinical_sub_df(clinical_df, 'project')
+df_samples = make_clinical_sub_df(clinical_df, 'samples')
+
+
 #%%
 
 # Esempio di utilizzo
