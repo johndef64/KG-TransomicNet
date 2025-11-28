@@ -83,6 +83,11 @@ PROBEMAP_URLS = [
     f"{GDC_ROOT_URL}HM27.hg38.manifest.gencode.v36.probeMap",
 ]
 
+PANCAN_DATA = [
+    "https://tcga-pancan-atlas-hub.s3.us-east-1.amazonaws.com/download/TCGASubtype.20170308.tsv.gz",
+    "https://tcga-pancan-atlas-hub.s3.us-east-1.amazonaws.com/download/TCGA_phenotype_denseDataOnlyDownload.tsv.gz"
+]
+
 # study = "TCGA-BRCA"
 # data_type = "gene-level_ascat3"
 # STUDY_URL = f"{GDC_ROOT_URL}{study}.{data_type}.tsv.gz"
@@ -212,6 +217,47 @@ def get_all_probe_map(output_dir):
     
     print(f"\n{'='*60}\n")
 
+def get_pancan_data(output_dir):
+    """
+    Download PanCan data files.
+    
+    Args:
+        output_dir: Directory di output per salvare i file
+    """
+    import requests
+    from pathlib import Path
+    
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    print(f"\n{'='*60}")
+    print(f"Downloading PanCan Data")
+    print(f"{'='*60}\n")
+    
+    for url in PANCAN_DATA:
+        # Estrai il nome del file dall'URL
+        file_name = url.split("/")[-1]
+        pancan_file = output_dir / file_name
+        
+        try:
+            print(f"✓ Downloading {file_name}...")
+            response = requests.get(url, stream=True)
+            
+            if response.status_code == 200:
+                with open(pancan_file, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                print(f"  → Saved to {pancan_file.name}")
+            else:
+                print(f"✗ Error: HTTP {response.status_code}")
+                
+        except requests.exceptions.RequestException as e:
+            print(f"✗ Error downloading {file_name}: {str(e)}")
+    
+    print(f"\n{'='*60}\n")
+
+
+#%%
 #### OMICS DATA Manipulation Functions
 
 STUDY = "TCGA-BRCA"
@@ -301,6 +347,8 @@ if __name__ == "__main__":
     #     get_tcga_data_types(study)
 
     get_all_probe_map("../data/omics/probe_maps")
+
+    get_pancan_data("../data/omics/PANCAN")
 #%%
 
 

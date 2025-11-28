@@ -102,15 +102,16 @@ def read_data_type(data_type):
     else:
         print(f"File not found for data type {data_type}: {file_path}")
         return None
-    
-# Load PKT NODELABELS
+
+
+#%%  Load PKT NODELABELS ===============================
 pkt_nodelabels_path = "../data/pkt/builds/v3.0.2/PKT_NodeLabels_with_metadata_v3.0.2.csv"
 pkt_nodelabels = pd.read_csv(pkt_nodelabels_path, dtype=str)
 pkt_nodelabels
 #%%
 pkt_nodelabels['bioentity_type'].value_counts()
 """
-in teoria potrei mappare su PKT
+in teoria sono mappabili su PKT
 bioentity_type:
 - gene --> entrez_id
 - protein --> uniprot_id
@@ -193,8 +194,11 @@ for id in mondo_ids:
 # from omics_connector import make_mirna_hgcn_map
 # make_mirna_hgcn_map()
 pkt_nodelabels[pkt_nodelabels['bioentity_type'] == "sequence"].class_code.value_counts()
-# %%
-# print working directory
+
+
+
+
+# %%   ================== LOAD OMICS DATAFRAMES ==============================
 import os
 print(f"Current working directory: {os.getcwd()}")
 
@@ -213,13 +217,11 @@ DATA_TYPES = [
     "clinical",                # Clinical Data
     "survival",                # Survival Data
 ]
-df= read_data_type(DATA_TYPES[5])
-print(df.columns)
-df
+# df= read_data_type(DATA_TYPES[5])
+# print(df.columns)
+# df
 
-#%%
-
-# Load omics metadata json files
+#%%  Load omics metadata json files
 METADATA_PATHS
 def load_omics_metadata(data_type):
     """Load metadata JSON for a specific omics data type."""
@@ -234,8 +236,7 @@ def load_omics_metadata(data_type):
 
 load_omics_metadata("star_tpm")
 
-#%% ---------------------------------------------------------------
- # LOAD all MAPPINGS
+#%% ------ LOAD all MAPPINGS
 ROOT_MAPS
 
 maps_file ={ 
@@ -261,11 +262,20 @@ for map_name, file_name in maps_file.items():
         print(f"Mapping file not found: {file_path}")
 
 mapping_dfs.keys()
-#%%
-mapping_dfs['bimart_genes_map'].head()
-#%%
 
-##  --- Load to ARANGODB collections ---
+#%% Load PANCAN data
+pancan_phenotype_path = "../data/omics/PANCAN/TCGA_phenotype_denseDataOnlyDownload.tsv.gz"
+pancan_phenotype_df = pd.read_csv(pancan_phenotype_path, sep='\t', compression='gzip', low_memory=False)
+pancan_phenotype_df.columns
+
+pancan_subtypes_path = "../data/omics/PANCAN/TCGASubtype.20170308.tsv.gz"
+pancan_subtypes_df = pd.read_csv(pancan_subtypes_path, sep='\t', compression='gzip', low_memory=False)
+pancan_subtypes_df.head()
+
+#%%
+ 
+mapping_dfs['bimart_genes_map'].head()
+#%% --- Load to ARANGODB collections ---
 
 # Ad ognuno anda aggiunta la chiave epr il mapping con il KNOWLEDGE GRAPH !
 
@@ -273,10 +283,9 @@ mapping_dfs['bimart_genes_map'].head()
 # data_source : "clinical"
 
 clinical_df = read_data_type("clinical")
-
 clinical_df.disease_type.unique()
 
-#%%
+#%% 1. Collezione PROJECT
 
 PROJECT_example = {
   "_key": "TCGA-BRCA",
@@ -313,7 +322,7 @@ PROJECT_load = {
     "disease_types": ast.literal_eval(clinical_df.loc[0, 'disease_type.project'])
 }
 PROJECT_load
-#%%
+#%% 2. Collezione SAMPLES
 
 SAMPLES_example = {
   "_key": "TCGA-D8-A1XU-01A",
@@ -370,9 +379,10 @@ SAMPLES_load = {
     # "annotations": clinical_df.loc[0, 'annotations.samples'],
 }
 SAMPLES_load
-#%% --------------------------------------------------------------------------
-# 2. Collezione CASES (pazienti/casi con dati clinici)
+#%% 3. Collezione CASES (pazienti/casi con dati clinici)
 # data_source : "clinical"
+clinical_df = read_data_type("clinical")
+survival_df = read_data_type("survival")
 
 CASES_example = {
   "_key": "TCGA-BH-A0W3",
@@ -476,66 +486,82 @@ for key in CASES_keys_nestes_with_dot:
     else:
         print(f"{key}: NOT FOUND in clinical_df columns")
 
+# Add to this collection : CLINICAL_SURVIVAL
+# data_source : "survival"
+
+survival_df.head().to_clipboard()
+#%%
+
+row = 0 # first row
+sample_id = clinical_df.loc[row, 'sample']
+
 CASES_load = {
     # "_key": clinical_df.loc[0, 'case_id'],
-    "_key": clinical_df.loc[0, 'submitter_id'],
+    "_key": clinical_df.loc[row, 'submitter_id'],
     # "id": clinical_df.loc[0, 'id'],
     # "submitter_id": clinical_df.loc[0, 'submitter_id'],
-    "tcga_project": clinical_df.loc[0, 'project_id.project'],
-    "primary_site": clinical_df.loc[0, 'primary_site'],
-    "disease_type": clinical_df.loc[0, 'disease_type'],
+    "tcga_project": clinical_df.loc[row, 'project_id.project'],
+    "primary_site": clinical_df.loc[row, 'primary_site'],
+    "disease_type": clinical_df.loc[row, 'disease_type'],
     
     "demographic": {
-        "gender": clinical_df.loc[0, 'gender.demographic'],
-        "race": clinical_df.loc[0, 'race.demographic'],
-        "ethnicity": clinical_df.loc[0, 'ethnicity.demographic'],
-        "vital_status": clinical_df.loc[0, 'vital_status.demographic'],
-        "age_at_index": clinical_df.loc[0, 'age_at_index.demographic'],
-        "days_to_birth": clinical_df.loc[0, 'days_to_birth.demographic'],
-        "year_of_birth": clinical_df.loc[0, 'year_of_birth.demographic'],
-        "year_of_death": clinical_df.loc[0, 'year_of_death.demographic'],
-        "days_to_death": clinical_df.loc[0, 'days_to_death.demographic']
+        "gender": clinical_df.loc[row, 'gender.demographic'],
+        "race": clinical_df.loc[row, 'race.demographic'],
+        "ethnicity": clinical_df.loc[row, 'ethnicity.demographic'],
+        "vital_status": clinical_df.loc[row, 'vital_status.demographic'],
+        "age_at_index": clinical_df.loc[row, 'age_at_index.demographic'],
+        "days_to_birth": clinical_df.loc[row, 'days_to_birth.demographic'],
+        "year_of_birth": clinical_df.loc[row, 'year_of_birth.demographic'],
+        "year_of_death": clinical_df.loc[row, 'year_of_death.demographic'],
+        "days_to_death": clinical_df.loc[row, 'days_to_death.demographic']
     },
 
     "diagnoses": [{
-        "primary_diagnosis": clinical_df.loc[0, 'primary_diagnosis.diagnoses'],
-        "tissue_or_organ_of_origin": clinical_df.loc[0, 'tissue_or_organ_of_origin.diagnoses'],
-        "site_of_resection_or_biopsy": clinical_df.loc[0, 'site_of_resection_or_biopsy.diagnoses'],
-        "morphology": clinical_df.loc[0, 'morphology.diagnoses'],
-        "icd_10_code": clinical_df.loc[0, 'icd_10_code.diagnoses'],
-        "age_at_diagnosis": clinical_df.loc[0, 'age_at_diagnosis.diagnoses'],
-        "age_at_diagnosis_years": clinical_df.loc[0, 'age_at_earliest_diagnosis_in_years.diagnoses.xena_derived'],
-        "days_to_diagnosis": clinical_df.loc[0, 'days_to_diagnosis.diagnoses'],
-        "year_of_diagnosis": clinical_df.loc[0, 'year_of_diagnosis.diagnoses'],
-        "tumor_grade": clinical_df.loc[0, 'tumor_grade.diagnoses'],
-        "classification_of_tumor": clinical_df.loc[0, 'classification_of_tumor.diagnoses'],
-        "prior_malignancy": clinical_df.loc[0, 'prior_malignancy.diagnoses'],
-        "synchronous_malignancy": clinical_df.loc[0, 'synchronous_malignancy.diagnoses'],
-        "prior_treatment": clinical_df.loc[0, 'prior_treatment.diagnoses'],
-        "progression_or_recurrence": clinical_df.loc[0, 'progression_or_recurrence.diagnoses'],
-        "last_known_disease_status": clinical_df.loc[0, 'last_known_disease_status.diagnoses'],
-        "days_to_last_follow_up": clinical_df.loc[0, 'days_to_last_follow_up.diagnoses'],
-        "ajcc_pathologic_stage": clinical_df.loc[0, 'ajcc_pathologic_stage.diagnoses'],
-        "ajcc_staging_system_edition": clinical_df.loc[0, 'ajcc_staging_system_edition.diagnoses'],
-        "ajcc_pathologic_t": clinical_df.loc[0, 'ajcc_pathologic_t.diagnoses'],
-        "ajcc_pathologic_n": clinical_df.loc[0, 'ajcc_pathologic_n.diagnoses'],
-        "ajcc_pathologic_m": clinical_df.loc[0, 'ajcc_pathologic_m.diagnoses']
+        "primary_diagnosis": clinical_df.loc[row, 'primary_diagnosis.diagnoses'],
+        "tissue_or_organ_of_origin": clinical_df.loc[row, 'tissue_or_organ_of_origin.diagnoses'],
+        "site_of_resection_or_biopsy": clinical_df.loc[row, 'site_of_resection_or_biopsy.diagnoses'],
+        "morphology": clinical_df.loc[row, 'morphology.diagnoses'],
+        "icd_10_code": clinical_df.loc[row, 'icd_10_code.diagnoses'],
+        "age_at_diagnosis": clinical_df.loc[row, 'age_at_diagnosis.diagnoses'],
+        "age_at_diagnosis_years": clinical_df.loc[row, 'age_at_earliest_diagnosis_in_years.diagnoses.xena_derived'],
+        "days_to_diagnosis": clinical_df.loc[row, 'days_to_diagnosis.diagnoses'],
+        "year_of_diagnosis": clinical_df.loc[row, 'year_of_diagnosis.diagnoses'],
+        "tumor_grade": clinical_df.loc[row, 'tumor_grade.diagnoses'],
+        "classification_of_tumor": clinical_df.loc[row, 'classification_of_tumor.diagnoses'],
+        "prior_malignancy": clinical_df.loc[row, 'prior_malignancy.diagnoses'],
+        "synchronous_malignancy": clinical_df.loc[row, 'synchronous_malignancy.diagnoses'],
+        "prior_treatment": clinical_df.loc[row, 'prior_treatment.diagnoses'],
+        "progression_or_recurrence": clinical_df.loc[row, 'progression_or_recurrence.diagnoses'],
+        "last_known_disease_status": clinical_df.loc[row, 'last_known_disease_status.diagnoses'],
+        "days_to_last_follow_up": clinical_df.loc[row, 'days_to_last_follow_up.diagnoses'],
+        "ajcc_pathologic_stage": clinical_df.loc[row, 'ajcc_pathologic_stage.diagnoses'],
+        "ajcc_staging_system_edition": clinical_df.loc[row, 'ajcc_staging_system_edition.diagnoses'],
+        "ajcc_pathologic_t": clinical_df.loc[row, 'ajcc_pathologic_t.diagnoses'],
+        "ajcc_pathologic_n": clinical_df.loc[row, 'ajcc_pathologic_n.diagnoses'],
+        "ajcc_pathologic_m": clinical_df.loc[row, 'ajcc_pathologic_m.diagnoses']
     }],
     
     "treatments": [{
-        "treatment_id": clinical_df.loc[0, 'treatment_id.treatments.diagnoses'],
-        "submitter_id": clinical_df.loc[0, 'submitter_id.treatments.diagnoses'],
-        "treatment_type": clinical_df.loc[0, 'treatment_type.treatments.diagnoses'],
-        "treatment_or_therapy": clinical_df.loc[0, 'treatment_or_therapy.treatments.diagnoses'],
-        "created_datetime": clinical_df.loc[0, 'created_datetime.treatments.diagnoses'],
-        "updated_datetime": clinical_df.loc[0, 'updated_datetime.treatments.diagnoses'],
-        "state": clinical_df.loc[0, 'state.treatments.diagnoses']
+        "treatment_id": clinical_df.loc[row, 'treatment_id.treatments.diagnoses'],
+        "submitter_id": clinical_df.loc[row, 'submitter_id.treatments.diagnoses'],
+        "treatment_type": clinical_df.loc[row, 'treatment_type.treatments.diagnoses'],
+        "treatment_or_therapy": clinical_df.loc[row, 'treatment_or_therapy.treatments.diagnoses'],
+        "created_datetime": clinical_df.loc[row, 'created_datetime.treatments.diagnoses'],
+        "updated_datetime": clinical_df.loc[row, 'updated_datetime.treatments.diagnoses'],
+        "state": clinical_df.loc[row, 'state.treatments.diagnoses']
     }],
     
     "exposures": {
-        "alcohol_history": clinical_df.loc[0, 'alcohol_history.exposures']
+        "alcohol_history": clinical_df.loc[row, 'alcohol_history.exposures']
     },
     
+    "survival": {
+        # use sample_id to link survival data
+        "sample_id": sample_id,
+        "OS_time": survival_df.loc[survival_df['sample'] == sample_id, 'OS.time'].values[0],
+        "OS": survival_df.loc[survival_df['sample'] == sample_id, 'OS'].values[0]
+    },
+
     # "tissue_source_site": {
     #     "id": clinical_df.loc[0, 'tissue_source_site_id.tissue_source_site'],
     #     "code": clinical_df.loc[0, 'code.tissue_source_site'],
@@ -545,9 +571,11 @@ CASES_load = {
     # }
 }
 CASES_load
-
+#%%
+survival_df.head()
 #%% --------------------------------------------------------------------------
-# 4. Collezione GENE_EXPRESSION (normalizzato)
+clinical_df.head()
+#%% 4. Collezione GENE_EXPRESSION (normalizzato)
 # data_source : ["star_counts", "star_fpkm", "star_tpm"]
 GENE_EXPRESSION_example ={
   "_key": "expr_TCGA-D8-A1XU-01A_ENSG00000223972.5",
@@ -561,9 +589,7 @@ GENE_EXPRESSION_example ={
 GENE_EXPRESSION_keys = GENE_EXPRESSION_example.keys()
 
 star_counts_df = read_data_type("star_counts")
-#%%
-star_counts_df.head()
-#%%
+# star_counts_df.head()
 star_fpkm_df = read_data_type("star_fpkm")
 star_tpm_df = read_data_type("star_tpm")
 #%% --------------------------------------------------------------------------
@@ -576,10 +602,21 @@ star_tpm_df = read_data_type("star_tpm")
 """
 #%%
 GENE = star_tpm_df.loc[0, 'Ensembl_ID']
+print(f"Processing gene: {GENE}")
+# use mapping_dfs to find the node_id in PKT for this GENE
+mapping_dfs["bimart_genes_map"].head()
+# columns are gene_stable_id_version and entrez_id
+# create mappings lookup dictionary
+gene_to_entrez = pd.Series(mapping_dfs["bimart_genes_map"]['entrez_id'].values,index=mapping_dfs["bimart_genes_map"]['gene_stable_id']).to_dict()
+node_id = str(gene_to_entrez.get(GENE.split(".")[0], "Unknown").split('.')[0])  # remove version if present 
+print(f"Mapped to node_id (entrez_id): {node_id}")
+
+
 GENE_EXPRESSION_load = {
         "_key": f"expr_{star_tpm_df.columns[1]}_{GENE}",
         "sample_id": star_tpm_df.columns[1],
         "gene_id": GENE,
+        "node_id": node_id,  # KG mapping
         "star_counts": star_counts_df.loc[star_tpm_df['Ensembl_ID'] == GENE, star_tpm_df.columns[1]].values[0],
         "star_fpkm": star_fpkm_df.loc[star_tpm_df['Ensembl_ID'] == GENE, star_tpm_df.columns[1]].values[0],
         "star_tpm": star_tpm_df.loc[star_tpm_df['Ensembl_ID'] == GENE, star_tpm_df.columns[1]].values[0],
@@ -587,13 +624,22 @@ GENE_EXPRESSION_load = {
     }
 GENE_EXPRESSION_load
 #%%
+# query PKT to verify node_id exists
+nodes_query = get_nodes_by_pattern(db_connection, "nodes", "_key", f"{node_id}")
+for n in nodes_query:
+    print(f"{n['class_code']}: {n['label']}")
+
+
+#%%
 GENES_EXP_LOAD = []
 
 for GENE in star_tpm_df['Ensembl_ID'].head():
+    node_id = str(gene_to_entrez.get(GENE.split(".")[0], "Unknown").split('.')[0])  # remove version if present 
     GENE_EXPRESSION_load = {
         "_key": f"expr_{star_tpm_df.columns[1]}_{GENE}",
         "sample_id": star_tpm_df.columns[1],
         "gene_id": GENE,
+        "node_id": node_id,  # KG mapping
         "star_counts": star_counts_df.loc[star_tpm_df['Ensembl_ID'] == GENE, star_tpm_df.columns[1]].values[0],
         "star_fpkm": star_fpkm_df.loc[star_tpm_df['Ensembl_ID'] == GENE, star_tpm_df.columns[1]].values[0],
         "star_tpm": star_tpm_df.loc[star_tpm_df['Ensembl_ID'] == GENE, star_tpm_df.columns[1]].values[0],
@@ -603,31 +649,74 @@ for GENE in star_tpm_df['Ensembl_ID'].head():
 
 GENES_EXP_LOAD
 
-#%% ------------------------------------------------
-# 5. Collezione CNV (Copy Number Variation - normalizzato)
+#%% 5. Collezione CNV (Copy Number Variation - normalizzato)
 # data_source : ["gene-level_ascat3", "allele_cnv_ascat3"]
+{
+  "_key": "cnv_TCGA-D8-A1XU-01A_chr1_17369_17436",
+  "sample_id": "TCGA-D8-A1XU-01A",
+  "chromosome": "chr1",
+  "start": 17369,
+  "end": 17436,
+  "value": 2,
+  "analysis_method": "allele_cnv_ascat3",
+}
+{"_key": "cnv_TCGA-D8-A1XU-01A_ENSG00000227232.5",
+  "sample_id": "TCGA-D8-A1XU-01A",
+  "value": 3,
+  "analysis_method": "gene-level_ascat3",
+}
 
-
-
-#%% --------------------------------------------
-# 6. Collezione MUTATIONS (normalizzato)
+cnv_gene_level_ascat3 = read_data_type("gene-level_ascat3")
+cnv_gene_level_ascat3
+#%%
+for i in range(50):
+    GENE = cnv_gene_level_ascat3.loc[i, 'Ensembl_ID']
+    print(f"Processing gene: {GENE}")
+    # use mapping_dfs to find the node_id in PKT for this GENE
+    mapping_dfs["bimart_genes_map"].head()
+    # columns are gene_stable_id_version and entrez_id
+    # create mappings lookup dictionary
+    gene_to_entrez = pd.Series(mapping_dfs["bimart_genes_map"]['entrez_id'].values,index=mapping_dfs["bimart_genes_map"]['gene_stable_id']).to_dict()
+    node_id = str(str(gene_to_entrez.get(GENE.split(".")[0], "Unknown")).split('.')[0])  # remove version if present 
+    print(f"Mapped to node_id (entrez_id): {node_id}")
+#%%
+mapping_dfs["bimart_genes_map"][["entrez_id", "hgnc_symbol"]].drop_duplicates()
+#%% 6. Collezione MUTATIONS (normalizzato)
 # data_source : "somaticmutation_wxs"
 
-#%% --------------------------------------------
-# 7. Collezione METHYLATION (normalizzato)
+
+mapping_dfs['rsid_map']["gene_map"] = mapping_dfs['rsid_map']["38.gene"] +"_" + mapping_dfs['rsid_map']["38.pos"].astype(str)
+mapping_dfs['rsid_map']["chr_map"] = mapping_dfs['rsid_map']["38.chr"] +"_" + mapping_dfs['rsid_map']["38.pos"].astype(str)
+mapping_dfs['rsid_map']
+#%%
+somatic_df = read_data_type("somaticmutation_wxs")
+somatic_df["gene_map"] = somatic_df["gene"]+"_" + somatic_df['start'].astype(str)
+somatic_df["chr_map"] = somatic_df["chrom"].replace("chr", "") +"_" + somatic_df['start'].astype(str)
+somatic_df[["gene", "start"]].drop_duplicates()
+#%%
+# merge somatic_df with mapping_dfs on chr_map
+somatic_merged =  pd.merge(somatic_df, mapping_dfs['rsid_map'], on="gene_map", how="left")
+somatic_merged[['gene', 'start', 'snp_id']]
+somatic_merged["snp_id"].nunique()
+
+# repeat the mapping using chromisome instes of gene ==============
+# somatic_merged =  pd.merge(somatic_df, mapping_dfs['rsid_map'], on="chr_map", how="left")
+# somatic_merged[['chrom', 'start', 'snp_id']]
+# somatic_merged["snp_id"].nunique()
+
+
+
+#%% 7. Collezione METHYLATION (normalizzato)
 # data_source : ["methylation450", "methylation27"]
 
 
-#%% --------------------------------------------
-# 8. Collezione MIRNA (normalizzato)
+#%% 8. Collezione MIRNA (normalizzato)
 # data_source : "mirna_seq"
 
-#%% --------------------------------------------
-# 9. Collezione PROTEIN (normalizzato)
+#%% 9. Collezione PROTEIN (normalizzato)
 # data_source : "protein"
 
-# 10. Collezione CLINICAL_SURVIVAL
-# data_source : "survival"
+
 
 #%% ----------------  [non farei queste collezioni ma mappere dentro le omics]  --------------------
 # 11. Collezione GENE_MAP (reference biologico)
