@@ -1,9 +1,13 @@
 .vscode/
-*__pycache__/*
+*__pycache__*
+scripts/__pycache__/*
+
 
 # ignore all files in data directory
-data/*
+# data/*
+data/omics/maps/temp/biomart_gene_mappings_chr*
 data/omics/TCGA*
+data/prior*
 temp_dir/*
 
 # ignore docs
@@ -17,7 +21,14 @@ gnn/*
 
 # ignore all files in kg-benchmark/pkt_data/builds directory
 kg-benchmark/pkt/pkt_data/builds/*
-data/pkt/builds/*
+data/pkt/builds/do*
+data/pkt/builds/pl*
+data/pkt/builds/v1*
+data/pkt/builds/v2*
+data/pkt/builds/v3.0.2.owl*
+data/pkt/builds/pkt*
+data/pkt/builds/Phe*
+
 #  specific files
 data/pkt/kg_ana*
 data/pkt/READ*
@@ -32,10 +43,14 @@ data/omics/readme.md
 find_everywhere.py
 webpagetext_scraper.py
 
+# scrpts
+scripts/pkt_read.pickle*
+
+
 # ignore all files .owl .obo .tsv .nt .csv 
 *.owl
 *.obo
-*.tsv
+# *.tsv
 *.nt
 #*.csv
 *.lnk
@@ -44,11 +59,12 @@ webpagetext_scraper.py
 *.7z
 *.probemap
 *.url
-*.json
+*.pdf
+# *.json
 
 # Tranne questa directory
-!data/omics/
-!data/pkt/
+# !data/omics/
+# !data/pkt/
 
 # except for specific files
 !data\omics\metadata\TCGA_sample_type_codes.csv
