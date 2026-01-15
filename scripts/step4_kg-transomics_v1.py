@@ -1,4 +1,4 @@
-
+#%%
 
 """
 
@@ -28,7 +28,7 @@ bioentity_type --> node property:
 - phenotype --> hp_id
 """
 
-# serch in db_connection for collection "nodes"in nodes containing "tumor or cancer ion labels"
+# serch in "db_connection" for collection "nodes"in nodes containing "tumor or cancer ion labels"
 nodes = get_nodes_by_pattern(db_connection, "nodes", "label", "%tumor%")
 nodes += get_nodes_by_pattern(db_connection, "nodes", "label", "%cancer%")
 print(f"Found {len(nodes)} nodes with 'tumor' or 'cancer' in labels")
@@ -67,12 +67,16 @@ bioentity_type --> node property:
 KG key maps
 gene expression data:
 entrez_id  --> node with bioentity_type = gene
+
 protein expression data:
 uniprot_id --> node with bioentity_type = protein
+
 variant data:
 rsid --> node with bioentity_type = variant
+
 disease associations:
 mondo_id --> node with bioentity_type = disease
+
 phenotype associations:
 hp_id --> node with bioentity_type = phenotype
 
@@ -80,16 +84,16 @@ hp_id --> node with bioentity_type = phenotype
 ArangoDB structure:
 - database: PKT_test10000
 
-Knowledge Graph:
+Knowledge Graph in PKT_test10000:
 - collection: nodes
   properties: _key, uri, namespace, entity_id, class_code, label, bioentity_type, description, synonym, source, source_type, integer_id, entrez_id, uniprot_id, rsid, mondo_id, hp_id
 
 - collection: edges
   properties: _from, _to, edge_id, source_uri, target_uri, predicate_uri, predicate_label, predicate_class_code, predicate_bioentity_type, predicate_source
 
-Omics Data Collections:
+Omics Data Collections in PKT_test10000: 
 
-  | Collection              | Scope / contenuto principale                                | Chiave e campi chiave                                         | Uso tipico in query                                                                   |
+| Collection              | Scope / contenuto principale                                | Chiave e campi chiave                                         | Uso tipico in query                                                                   |
 | ----------------------- | ----------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | GENES                   | Metadata di geni, condivisi tra tutti gli studi             | _key= Ensembl base; es.ENSG00000141510                        | Join semantico dai layer quantitativi a info gene (symbol, biotype, ecc.).            |
 | EXPRESSION_INDEX        | Indice globale dei geni per vettori di espressione          | _key=expr_index_TCGA-<STUDY>                                  | Recuperare l’ordine dei geni per interpretare i vettori diGENE_EXPRESSION_SAMPLES.    |
@@ -105,10 +109,66 @@ Omics Data Collections:
 
 """
 
+
+
+def get_data_structure_info(collection_name):
+    """
+    get dict atrigutes kyes and values  from on entry in collection_name
+    """
+    aql_query = f"""
+    FOR doc IN {collection_name}
+      LIMIT 1
+      RETURN doc
+    """
+    result = db_connection.aql.execute(aql_query)
+    for doc in result:
+        return doc
+get_data_structure_info("GENE_EXPRESSION_SAMPLES")
+
+"""
+{'_key': 'TCGA-D8-A146-01A',
+ '_id': 'GENE_EXPRESSION_SAMPLES/TCGA-D8-A146-01A',
+ '_rev': '_kuh2f5O---',
+ 'sample_id': 'TCGA-D8-A146-01A',
+ 'cohort': 'TCGA-BRCA',
+ 'data_type': 'gene_expression_vector',
+ 'expression_index_ref': 'expression_index/expr_index_TCGA-BRCA',
+ 'platform': 'STAR',
+ 'n_genes': 60660,
+ 'values_counts': None,
+ 'values_fpkm': None,
+ 'values_tpm': [5.662037403353558,
+  3.37609586203262,
+  6.8601396907537975,
+  4.400551591403899,
+  2.84516885873
+"""
+
+
+get_data_structure_info("EXPRESSION_INDEX")
+
+"""
+
+"""
+
+#%%
 """
 ### Strategie Query AQL Raccomandate
 
 Per estrarre sottografi multi-omici integrati:
+
+Data structure in PKT_test10000:
+# 4. Collezione GENE_EXPRESSION_SAMPLES (normalizzato)
+{"_key": "expr_TCGA-D8-A1XU-01A_ENSG00000223972.5",
+  "sample_id": "TCGA-D8-A1XU-01A",
+  "gene_id": "ENSG00000223972.5",
+  "star_counts": 11.737669863177452,
+  "star_fpkm": 5.123456,
+  "star_tpm": 6.543210,
+  "platform": "STAR",
+  "analysis_date": "2015-03-15"
+}
+
 
 ```aql
 // Query trans-omica per pathway-specific expression
@@ -123,8 +183,37 @@ FOR gene IN genes
       expression: expr.tpm
     }
 ```
-
 """
+
+def query_gene_expression_by_pathway(db_connection, 
+                                     pathway_genes, 
+                                     tumor_samples):
+    aql_query = """
+    FOR gene IN genes
+      FILTER gene.entrez_id IN @pathway_genes
+      FOR expr IN gene_expression_TCGA_BRCA
+        FILTER expr.gene_ref == CONCAT("genes/", gene._key)
+        FILTER expr.sample_id IN @tumor_samples
+        RETURN {
+          gene: gene.hgnc_symbol,
+          sample: expr.sample_id,
+          expression: expr.tpm
+        }
+    """
+    bind_vars = {
+        "pathway_genes": pathway_genes,
+        "tumor_samples": tumor_samples
+    }
+    result = db_connection.aql.execute(aql_query, bind_vars=bind_vars)
+    return list(result)
+
+# example usage
+pathway_genes = ["7157", "7422", "1956"]  # Example Entrez IDs for TP53, EGFR, AKT1
+tumor_samples = ["TCGA-A1-A0SB-01A", "TCGA-BH-A0B3-01A"]  # Example sample IDs
+expression_data = query_gene_expression_by_pathway(db_connection, pathway_genes, tumor_samples)
+for record in expression_data:
+    print(record)
+    
 
 """
 

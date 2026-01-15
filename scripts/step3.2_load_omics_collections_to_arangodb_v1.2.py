@@ -31,7 +31,7 @@ sorted_files = [
     # genes
     'genes.json',
     # expression
-    'expression_index.json',
+    'gene_expression_index.json',
     f'gene_expression_samples_TCGA-{STUDY}.json',
     # copy-number
     'cnv_index.json',
@@ -89,7 +89,7 @@ def create_tcga_collections(db):
     try:
         collections_vertex = [
             "GENES",
-            "EXPRESSION_INDEX",
+            "GENE_EXPRESSION_INDEX",
             "CNV_INDEX",
             "MIRNA_INDEX",
             "PROTEIN_INDEX",
@@ -277,7 +277,7 @@ def import_tcga_datasets(db, SKIP_LOAD=False, REPLACE_EXISTING=False):
     # 2. Index collections (global, uno per study/coorte)
     if not SKIP_LOAD:
         index_map = {
-            "expression_index.json": "EXPRESSION_INDEX",
+            "gene_expression_index.json": "GENE_EXPRESSION_INDEX",
             "cnv_index.json": "CNV_INDEX",
             "mirna_index.json": "MIRNA_INDEX",
             "protein_index.json": "PROTEIN_INDEX",
@@ -285,7 +285,9 @@ def import_tcga_datasets(db, SKIP_LOAD=False, REPLACE_EXISTING=False):
         }
     else:
         print("\n⚠ SKIP_LOAD is True: Skipping index collections loading.")
-        index_map = {"methylation_index.json": "METHYLATION_INDEX", # NEW!
+        index_map = {
+            # "methylation_index.json": "METHYLATION_INDEX", # NEW!
+            "gene_expression_index.json": "GENE_EXPRESSION_INDEX", # FIX
         }
     
     for fname, colname in index_map.items():
@@ -310,7 +312,7 @@ def import_tcga_datasets(db, SKIP_LOAD=False, REPLACE_EXISTING=False):
     else:
         print("\n⚠ SKIP_LOAD is True: Skipping sample-level collections loading.")
         sample_map = {
-            f"methylation_samples_TCGA-{STUDY}.json": "METHYLATION_SAMPLES", # NEW!
+            # f"methylation_samples_TCGA-{STUDY}.json": "METHYLATION_SAMPLES", # NEW!
         }
     
     for fname, colname in sample_map.items():
@@ -361,3 +363,15 @@ if __name__ == "__main__":
         print("✗ Failed to connect to ArangoDB. Please check if ArangoDB is running.")
 
 # %%
+
+# check collections and number of documents
+if db:
+    # show db create_tcga_collections
+    print("\n--- Collections in database ---")
+    for col_name in db.collections():
+        collection = db.collection(col_name['name'])
+        count = collection.count()
+        # print(f"Collection: {col_name['name']}, Documents: {str(count['count'])}")
+        print(collection)
+#%%
+print(os.path.exists(os.path.join(data_dir, "gene_expression_index.json")))

@@ -912,12 +912,12 @@ def main():
     STEP2 = False  # Semantic Layer - GENES
     STEP3 = False  # Semantic Layer - PROJECT
     STEP4 = False  # Metadata Layer - SAMPLES & CASES
-    STEP5 = False  # Quantitative Index Layer - EXPRESSION_INDEX
+    STEP5 = True  # Quantitative Index Layer - GENE_EXPRESSION_INDEX
     STEP6 = False  # Quantitative Vector Layer - GENE_EXPRESSION_SAMPLES
     STEP7 = False  # CNV Index & Vectors
     STEP8 = False  # miRNA Index & Vectors
     STEP9 = False  # Protein Index & Vectors
-    STEP10 = True  # Methylation Index & Vectors (NEW!)
+    STEP10 = False  # Methylation Index & Vectors (NEW!)
     ALL_STEPS = False  # If True, run all steps
     
     # ========== STEP 1: Load Mappings ==========
@@ -975,11 +975,11 @@ def main():
     
     # ========== STEP 5: Quantitative Index Layer - EXPRESSION_INDEX ==========
     if STEP5 or ALL_STEPS:
-        logger.info("[Step 5/10] Building Quantitative Index Layer - EXPRESSION_INDEX...")
+        logger.info("[Step 5/10] Building Quantitative Index Layer - GENE_EXPRESSION_INDEX...")
         star_tpm = load_omics_data("star_tpm")
         if star_tpm is not None:
             expr_index = index_builder.build_expression_index(star_tpm)
-            index_builder.save_collection(expr_index, "expression_index")
+            index_builder.save_collection(expr_index, "gene_expression_index")
         logger.info("")
     
     # ========== STEP 6: Quantitative Vector Layer - GENE_EXPRESSION_SAMPLES ==========
