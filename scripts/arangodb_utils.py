@@ -422,6 +422,33 @@ def check_collections_data(db_connection):
 
 # --- FUNZIONI DI RETRIEVAL NODI ---
 
+def get_nodes_by_ids(db, collection_name, ids_list):
+    """
+    Recupera nodi da una collezione in base a una lista di IDs
+    
+    Args:
+        db: Database ArangoDB
+        collection_name: Nome della collezione
+        ids_list: Lista di IDs dei nodi da recuperare
+    
+    Returns:
+        Lista di nodi che corrispondono agli IDs
+    """
+    try:
+        aql = f"""
+        FOR doc IN {collection_name}
+            FILTER doc._key IN @ids
+            RETURN doc
+        """
+        cursor = db.aql.execute(aql, bind_vars={'ids': ids_list})
+        results = [doc for doc in cursor]
+        print(f"✓ Found {len(results)} nodes with specified IDs")
+        return results
+    except Exception as e:
+        print(f"✗ Error retrieving nodes: {e}")
+        traceback.print_exc()
+        return []
+
 def get_nodes_by_property(db, collection_name, property_name, property_value):
     """
     Recupera nodi da una collezione in base a una proprietà specifica

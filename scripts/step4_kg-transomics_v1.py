@@ -95,22 +95,23 @@ Omics Data Collections in PKT_test10000:
 
 | Collection              | Scope / contenuto principale                                | Chiave e campi chiave                                         | Uso tipico in query                                                                   |
 | ----------------------- | ----------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| GENES                   | Metadata di geni, condivisi tra tutti gli studi             | _key= Ensembl base; es.ENSG00000141510                        | Join semantico dai layer quantitativi a info gene (symbol, biotype, ecc.).            |
-| EXPRESSION_INDEX        | Indice globale dei geni per vettori di espressione          | _key=expr_index_TCGA-<STUDY>                                  | Recuperare l’ordine dei geni per interpretare i vettori diGENE_EXPRESSION_SAMPLES.    |
-| CNV_INDEX               | Indice feature per CNV (gene / segmenti)                    | _key=cnv_index_TCGA-<STUDY>                                   | Ottenere posizione feature CNV nei vettori diCNV_SAMPLES.                             |
-| MIRNA_INDEX             | Indice feature per miRNA                                    | _key=mirna_index_TCGA-<STUDY>                                 | Interpretare i vettori miRNA inMIRNA_SAMPLES.                                         |
-| PROTEIN_INDEX           | Indice feature per proteomica (peptidi/proteine)            | _key=protein_index_TCGA-<STUDY>                               | Interpretare i vettori proteici inPROTEIN_SAMPLES.                                    |
 | PROJECTS                | Metadata TCGA di progetto (per es. TCGA-BRCA, TCGA-LUAD, …) | _key= project_id TCGA                                         | Navigare coorti, descrizioni e mapping project ↔ studi.                               |
 | SAMPLES                 | Metadata campioni TCGA (barcode, case, project, type, ecc.) | _key= sample_id TCGA                                          | Filtrare subset di campioni per tipo, coorte, case e collegare ai layer quantitativi. |
+| GENES                   | Metadata di geni, condivisi tra tutti gli studi             | _key= Ensembl base; es.ENSG00000141510                        | Join semantico dai layer quantitativi a info gene (symbol, biotype, ecc.).            |
 | GENE_EXPRESSION_SAMPLES | Vettori di espressione per campione (TPM / counts / FPKM)   | _key=sample_id; campi:values_tpm,expr_index_ref,cohort        | Costruire matrici gene × sample via join conEXPRESSION_INDEXeGENES.                   |
+| GENE_EXPRESSION_INDEX   | Indice globale dei geni per vettori di espressione          | _key=expr_index_TCGA-<STUDY>                                  | Recuperare l’ordine dei geni per interpretare i vettori diGENE_EXPRESSION_SAMPLES.    |
 | CNV_SAMPLES             | Vettori CNV per campione                                    | _key=sample_id; campi:values_cnv,cnv_index_ref,cohort         | Analisi CNV per coorte / case, export verso ML.                                       |
+| CNV_INDEX               | Indice feature per CNV (gene / segmenti)                    | _key=cnv_index_TCGA-<STUDY>                                   | Ottenere posizione feature CNV nei vettori diCNV_SAMPLES.                             |
+| METHYLATION_SAMPLES     | Vettori di metilazione per campione                         | _key=sample_id; campi:values_methylation,methylation_index_ref,cohort | Analisi metilazione per coorte / case, export verso ML.                               |
+| METHYLATION_INDEX       | Indice feature per metilazione (CpG sites
 | MIRNA_SAMPLES           | Vettori di espressione miRNA per campione                   | _key=sample_id; campi:values_mirna,mirna_index_ref,cohort     | Analisi miRNA e integrazione multi-omica.                                             |
+| MIRNA_INDEX             | Indice feature per miRNA                                    | _key=mirna_index_TCGA-<STUDY>                                 | Interpretare i vettori miRNA inMIRNA_SAMPLES.                                         |
 | PROTEIN_SAMPLES         | Vettori proteomici per campione                             | _key=sample_id; campi:values_protein,protein_index_ref,cohort | Layer proteomico per modelli multi-omici.                                             |
+| PROTEIN_INDEX           | Indice feature per proteomica (peptidi/proteine)            | _key=protein_index_TCGA-<STUDY>                               | Interpretare i vettori proteici inPROTEIN_SAMPLES.                                    |
+
+in IDEXES the value "position" refers to the index in the omic data vector per sample ("_SAMPLES"), example "values_tpm" that corresponds to the gene.)
 
 """
-
-
-
 def get_data_structure_info(collection_name):
     """
     get dict atrigutes kyes and values  from on entry in collection_name
@@ -123,9 +124,84 @@ def get_data_structure_info(collection_name):
     result = db_connection.aql.execute(aql_query)
     for doc in result:
         return doc
-get_data_structure_info("GENE_EXPRESSION_SAMPLES")
 
+""" PROJECTS document example:
+{'_key': 'TCGA-BRCA',
+ '_id': 'PROJECTS/TCGA-BRCA',
+ '_rev': '_kujDl82---',
+ 'name': 'Breast Invasive Carcinoma',
+ 'program': 'TCGA',
+ 'primary_site': 'Breast',
+ 'disease_types': ['Squamous Cell Neoplasms',
+  'Adnexal and Skin Appendage Neoplasms',
+  'Epithelial Neoplasms, NOS',
+  'Complex Epithelial Neoplasms',
+  'Fibroepithelial Neoplasms',
+  'Cystic, Mucinous and Serous Neoplasms',
+  'Basal Cell Neoplasms',
+  'Adenomas and Adenocarcinomas',
+  'Ductal and Lobular Neoplasms'],
+ 'entity_type': 'project',
+ 'n_cases': 1098,
+ 'n_samples': 1255}
 """
+get_data_structure_info("PROJECTS")
+
+""" SAMPLES document example:
+{'_key': 'TCGA-BH-A0W3-01A',
+ '_id': 'SAMPLES/TCGA-BH-A0W3-01A',
+ '_rev': '_kujMAnC---',
+ 'submitter_id': 'TCGA-BH-A0W3',
+ 'case_ref': 'cases/TCGA-BH-A0W3',
+ 'project_ref': 'projects/TCGA-BRCA',
+ 'sample_type': 'Primary Tumor',
+ 'sample_type_id': 1,
+ 'tissue_type': 'Tumor',
+ 'tumor_descriptor': 'Primary',
+ 'specimen_type': 'Solid Tissue',
+ 'composition': 'Not Reported',
+ 'preservation_method': 'OCT',
+ 'days_to_collection': 85,
+ 'entity_type': 'sample'}
+"""
+get_data_structure_info("SAMPLES")
+
+""" GENES  document example:
+{'_key': 'ENSG00000290825',
+ '_id': 'GENES/ENSG00000290825',
+ '_rev': '_kujDS_q---',
+ 'entity_type': 'gene',
+ 'bioentity_type': 'gene',
+ 'gene_stable_id': 'ENSG00000290825',
+ 'gene_stable_id_version': 'ENSG00000290825.2',
+ 'hgnc_symbol': None,
+ 'entrez_id': '727856',
+ 'uniprot_id': None,
+ 'mirbase_id': None,
+ 'gene_type': 'lncRNA',
+ 'gene_description': 'DEAD/H-box helicase 11 like 16 (pseudogene) [Source:NCBI gene (formerly Entrezgene);Acc:727856]',
+ 'chromosome': '1',
+ 'gene_start_bp': '11121',
+ 'gene_end_bp': '24894',
+ 'strand': '1',
+ 'transcript_ids': ['ENST00000832824',
+  'ENST00000832825',
+  'ENST00000832826',
+  'ENST00000832827',
+  'ENST00000832828',
+  'ENST00000832829',
+  'ENST00000832830',
+  'ENST00000832837',
+...
+  'ENST00000832848',
+  'ENST00000832849',
+  'ENST00000832823'],
+ 'source': 'Ensembl_BioMart',
+ 'source_version': 'GRCh38.v36'}
+"""
+get_data_structure_info("GENES")
+
+""" GENE_EXPRESSION_SAMPLES document example:
 {'_key': 'TCGA-D8-A146-01A',
  '_id': 'GENE_EXPRESSION_SAMPLES/TCGA-D8-A146-01A',
  '_rev': '_kuh2f5O---',
@@ -141,15 +217,162 @@ get_data_structure_info("GENE_EXPRESSION_SAMPLES")
   3.37609586203262,
   6.8601396907537975,
   4.400551591403899,
-  2.84516885873
+  2.84516885873,
+  ...,
+  ...,
+  ...
+  ]
+}
 """
+get_data_structure_info("GENE_EXPRESSION_SAMPLES")
+
+"""  GENE_EXPRESSION_INDEX document example:
+
+  {'position': 167,
+   'gene_id_ensembl': 'ENSG00000007080.11',
+   'gene_id_base': 'ENSG00000007080',
+   'gene_ref': 'genes/ENSG00000007080',
+   'entrez_id': '115098',
+   'hgnc_symbol': 'CCDC124'},
+  {'position': 168,
+   'gene_id_ensembl': 'ENSG00000007129.18',
+   'gene_id_base': 'ENSG00000007129',
+   'gene_ref': 'genes/ENSG00000007129',
+   'entrez_id': '90273',
+   'hgnc_symbol': 'CEACAM21'},
+  {'position': 169,
+   'gene_id_ensembl': 'ENSG00000007168.14',
+   'gene_id_base': 'ENSG00000007168',
+   'gene_ref': 'genes/ENSG00000007168',
+   'entrez_id': '5048',
+   'hgnc_symbol': 'PAFAH1B1'},
+  {...}
+"""
+get_data_structure_info("GENE_EXPRESSION_INDEX")
 
 
-get_data_structure_info("EXPRESSION_INDEX")
+""" CNV_SAMPLES document example:
 
 """
+get_data_structure_info("CNV_SAMPLES")
+
+""" CNV_INDEX document example:
 
 """
+get_data_structure_info("CNV_INDEX")
+
+# %%
+"""METHYLATION_SAMPLES document example:
+{'_key': 'TCGA-A7-A0CD-01A',
+ '_id': 'METHYLATION_SAMPLES/TCGA-A7-A0CD-01A',
+ '_rev': '_kujMAE----',
+ 'sample_id': 'TCGA-A7-A0CD-01A',
+ 'cohort': 'TCGA-BRCA',
+ 'data_type': 'methylation_vector',
+ 'methylation_index_ref': 'methylation_index/methylation_index_TCGA-BRCA',
+ 'platform': 'Illumina HumanMethylation27',
+ 'n_probes': 27578,
+ 'values_beta': [0.891275578180925,
+  0.0337566988200663,
+  0.789521222963392,
+  0.619850753240135,
+  0.0619325703831766,
+  0.0218987623260666,
+  0.985018975396962,
+  0.0132840494835158,
+  0.0123023732109782,
+  None,
+  0.90177723238615,
+  0.0161257521439586,
+  0.190583229352712,
+  0.0201717551329457,
+  0.10779725647655,
+  0.0204887059820779,
+...
+  0.320087517917168,
+  0.0741297816754439,
+  ...],
+ 'value_range': '[0.0, 1.0]',
+ 'description': 'Beta values representing methylation levels at CpG sites'}
+"""
+get_data_structure_info("METHYLATION_SAMPLES")
+
+""" METHYLATION_INDEX document example:
+{'_key': 'methylation_index_TCGA-BRCA',
+ '_id': 'METHYLATION_INDEX/methylation_index_TCGA-BRCA',
+ '_rev': '_k7rvuzu---',
+ 'cohort': 'TCGA-BRCA',
+ 'data_type': 'methylation_index',
+ 'n_probes': 27578,
+ 'platform': 'Illumina HumanMethylation27',
+ 'genome_version': 'GRCh38',
+ 'probe_mappings': [{'position': 0,
+   'probe_id': 'cg00000292',
+   'chromosome': 'chr16',
+   'genomic_start': 28878778,
+   'genomic_end': 28878780,
+   'strand': '-',
+   'gene_symbols': ['AC009093.11', 'ATP2A1'],
+   'gene_ids': ['ENSG00000196296'],
+   'gene_refs': ['genes/ENSG00000196296']},
+  {'position': 1,
+   'probe_id': 'cg00002426',
+   'chromosome': 'chr3',
+   'genomic_start': 57757815,
+   'genomic_end': 57757817,
+   'strand': '-',
+   'gene_symbols': ['SLMAP'],
+   'gene_ids': ['ENSG00000163681'],
+...
+   'gene_symbols': ['SYTL4'],
+   'gene_ids': ['ENSG00000102362'],
+   'gene_refs': ['genes/ENSG00000102362']},
+  ...],
+ 'description': 'CpG probe position mapping for methylation beta value vectors in sample documents'}
+"""
+get_data_structure_info("METHYLATION_INDEX")
+
+#%%
+""" MIRNA_SAMPLES document example:
+{'_key': 'TCGA-D8-A146-01A',
+ '_id': 'MIRNA_SAMPLES/TCGA-D8-A146-01A',
+ '_rev': '_kuh3bmC---',
+ 'sample_id': 'TCGA-D8-A146-01A',
+ 'cohort': 'TCGA-BRCA',
+ 'data_type': 'mirna_vector',
+ 'mirna_index_ref': 'mirna_index/mirna_index_TCGA-BRCA',
+ 'platform': 'Illumina',
+ 'n_mirnas': 1881,
+ 'values_expression': [12.815167145771248,
+  12.816050718114727,
+  12.855015959831322,
+  14.730158401240104,
+  11.169628343075129,
+  8.859832599955457,
+  9.505781518958475,
+...
+  0.395469768620962,
+  0.395469768620962,
+  0,
+  0,
+  ...]}
+"""
+get_data_structure_info("MIRNA_SAMPLES")
+
+""" MIRNA_INDEX document example:
+
+"""
+get_data_structure_info("MIRNA_INDEX")
+
+""" PROTEIN_SAMPLES document example:
+
+"""
+get_data_structure_info("PROTEIN_SAMPLES")
+
+""" PROTEIN_INDEX document example:
+
+"""
+get_data_structure_info("PROTEIN_INDEX")
 
 #%%
 """

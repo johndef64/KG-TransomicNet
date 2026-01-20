@@ -266,7 +266,7 @@ def import_tcga_datasets(db, SKIP_LOAD=False, REPLACE_EXISTING=False):
     
     # 1. GENES (global, no overwrite; entries con stesso _key non vengono ricaricate)
     genes_path = os.path.join(data_dir, "genes.json")
-    if os.path.exists(genes_path):
+    if os.path.exists(genes_path) and not SKIP_LOAD:
         print(f"\n📂 Loading GENES from {genes_path}...")
         genes_docs = _load_json_lines(genes_path)
         genes_col = db.collection("GENES")
@@ -275,21 +275,49 @@ def import_tcga_datasets(db, SKIP_LOAD=False, REPLACE_EXISTING=False):
         print("GENES file not found, skipping.")
     
     # 2. Index collections (global, uno per study/coorte)
-    if not SKIP_LOAD:
-        index_map = {
+    collection_names_map = {
+        "index_map" :{
             "gene_expression_index.json": "GENE_EXPRESSION_INDEX",
             "cnv_index.json": "CNV_INDEX",
             "mirna_index.json": "MIRNA_INDEX",
             "protein_index.json": "PROTEIN_INDEX",
-            "methylation_index.json": "METHYLATION_INDEX", # NEW!
-        }
+            "methylation_index.json": "METHYLATION_INDEX" # NEW!
+        },
+        "sample_map" :{
+            f"gene_expression_samples_TCGA-{STUDY}.json": "GENE_EXPRESSION_SAMPLES",
+            f"cnv_samples_TCGA-{STUDY}.json": "CNV_SAMPLES",
+            f"mirna_samples_TCGA-{STUDY}.json": "MIRNA_SAMPLES",
+            f"protein_samples_TCGA-{STUDY}.json": "PROTEIN_SAMPLES",
+            f"methylation_samples_TCGA-{STUDY}.json": "METHYLATION_SAMPLES" # NEW!
+    }
+    }
+
+    if not SKIP_LOAD:
+        index_map = collection_names_map["index_map"]
     else:
         print("\n⚠ SKIP_LOAD is True: Skipping index collections loading.")
         index_map = {
-            # "methylation_index.json": "METHYLATION_INDEX", # NEW!
-            "gene_expression_index.json": "GENE_EXPRESSION_INDEX", # FIX
+            # "gene_expression_index.json": "GENE_EXPRESSION_INDEX",
+            # "cnv_index.json": "CNV_INDEX",
+            # "mirna_index.json": "MIRNA_INDEX",
+            # "protein_index.json": "PROTEIN_INDEX",
+            # "methylation_index.json": "METHYLATION_INDEX" # NEW!
         }
     
+    # 3. Sample-level quantitative collections (study-specific)
+    if not SKIP_LOAD:
+        sample_map = collection_names_map["sample_map"]
+    else:
+        print("\n⚠ SKIP_LOAD is True: Skipping sample-level collections loading.")
+        sample_map = {
+            # f"gene_expression_samples_TCGA-{STUDY}.json": "GENE_EXPRESSION_SAMPLES",
+            f"cnv_samples_TCGA-{STUDY}.json": "CNV_SAMPLES",
+            # f"mirna_samples_TCGA-{STUDY}.json": "MIRNA_SAMPLES",
+            # f"protein_samples_TCGA-{STUDY}.json": "PROTEIN_SAMPLES",
+            # f"methylation_samples_TCGA-{STUDY}.json": "METHYLATION_SAMPLES" # NEW!
+    }
+
+    # Load Omics collections
     for fname, colname in index_map.items():
         path = os.path.join(data_dir, fname)
         if not os.path.exists(path):
@@ -299,21 +327,6 @@ def import_tcga_datasets(db, SKIP_LOAD=False, REPLACE_EXISTING=False):
         docs = _load_json_lines(path)
         col = db.collection(colname)
         _insert_incremental(col, docs, unique_key="_key")
-    
-    # 3. Sample-level quantitative collections (study-specific)
-    if not SKIP_LOAD:
-        sample_map = {
-            f"gene_expression_samples_TCGA-{STUDY}.json": "GENE_EXPRESSION_SAMPLES",
-            f"cnv_samples_TCGA-{STUDY}.json": "CNV_SAMPLES",
-            f"mirna_samples_TCGA-{STUDY}.json": "MIRNA_SAMPLES",
-            f"protein_samples_TCGA-{STUDY}.json": "PROTEIN_SAMPLES",
-            f"methylation_samples_TCGA-{STUDY}.json": "METHYLATION_SAMPLES", # NEW!
-        }
-    else:
-        print("\n⚠ SKIP_LOAD is True: Skipping sample-level collections loading.")
-        sample_map = {
-            # f"methylation_samples_TCGA-{STUDY}.json": "METHYLATION_SAMPLES", # NEW!
-        }
     
     for fname, colname in sample_map.items():
         path = os.path.join(data_dir, fname)
@@ -330,16 +343,16 @@ def import_tcga_datasets(db, SKIP_LOAD=False, REPLACE_EXISTING=False):
         "projects.json": "PROJECTS",
         "samples.json": "SAMPLES",
     }
-    
-    for fname, colname in meta_map.items():
-        path = os.path.join(data_dir, fname)
-        if not os.path.exists(path):
-            print(f"{fname} not found, skipping.")
-            continue
-        print(f"\n📂 Loading {colname} from {path}...")
-        docs = _load_json_lines(path)
-        col = db.collection(colname)
-        _insert_incremental(col, docs, unique_key="_key")
+    if not SKIP_LOAD:
+        for fname, colname in meta_map.items():
+            path = os.path.join(data_dir, fname)
+            if not os.path.exists(path):
+                print(f"{fname} not found, skipping.")
+                continue
+            print(f"\n📂 Loading {colname} from {path}...")
+            docs = _load_json_lines(path)
+            col = db.collection(colname)
+            _insert_incremental(col, docs, unique_key="_key")
 
 #%%
 
@@ -356,7 +369,7 @@ if __name__ == "__main__":
         create_tcga_collections(db)
         
         # 3. Importazione Dati TCGA
-        import_tcga_datasets(db, True, False)  # Set to True, True if you want to skip and replace
+        import_tcga_datasets(db, SKIP_LOAD=True, REPLACE_EXISTING=True)  # Set to True, True if you want to skip and replace
         
         print("\n✓ TCGA datasets import completed.")
     else:
