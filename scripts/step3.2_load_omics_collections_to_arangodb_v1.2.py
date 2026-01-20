@@ -108,7 +108,7 @@ def create_tcga_collections(db):
                 db.create_collection(cname)
                 print(f"✓ Created collection: {cname}")
             else:
-                print(f"Collection {cname} already exists")
+                print(f"Collection {cname} already exists ({db.collection(cname).count()} documents)")
         
         # Indici essenziali (oltre all'indice implicito su _key)
         try:
@@ -243,7 +243,9 @@ def _insert_incremental(collection, docs, unique_key: str = "_key"):
 
 # --- IMPORTAZIONE DATASETS TCGA ---
 
-def import_tcga_datasets(db, SKIP_LOAD=False, REPLACE_EXISTING=False):
+def import_tcga_datasets(db, 
+                         PARTIAL_LOAD_LIST=[],
+                         REPLACE_EXISTING=False):
     """
     Carica:
     - GENES (global, dedup su _key: insert senza overwrite)
@@ -266,7 +268,7 @@ def import_tcga_datasets(db, SKIP_LOAD=False, REPLACE_EXISTING=False):
     
     # 1. GENES (global, no overwrite; entries con stesso _key non vengono ricaricate)
     genes_path = os.path.join(data_dir, "genes.json")
-    if os.path.exists(genes_path) and not SKIP_LOAD:
+    if os.path.exists(genes_path):
         print(f"\n📂 Loading GENES from {genes_path}...")
         genes_docs = _load_json_lines(genes_path)
         genes_col = db.collection("GENES")
@@ -292,31 +294,15 @@ def import_tcga_datasets(db, SKIP_LOAD=False, REPLACE_EXISTING=False):
     }
     }
 
-    if not SKIP_LOAD:
-        index_map = collection_names_map["index_map"]
-    else:
-        print("\n⚠ SKIP_LOAD is True: Skipping index collections loading.")
-        index_map = {
-            # "gene_expression_index.json": "GENE_EXPRESSION_INDEX",
-            # "cnv_index.json": "CNV_INDEX",
-            # "mirna_index.json": "MIRNA_INDEX",
-            # "protein_index.json": "PROTEIN_INDEX",
-            # "methylation_index.json": "METHYLATION_INDEX" # NEW!
-        }
-    
-    # 3. Sample-level quantitative collections (study-specific)
-    if not SKIP_LOAD:
-        sample_map = collection_names_map["sample_map"]
-    else:
-        print("\n⚠ SKIP_LOAD is True: Skipping sample-level collections loading.")
-        sample_map = {
-            # f"gene_expression_samples_TCGA-{STUDY}.json": "GENE_EXPRESSION_SAMPLES",
-            f"cnv_samples_TCGA-{STUDY}.json": "CNV_SAMPLES",
-            # f"mirna_samples_TCGA-{STUDY}.json": "MIRNA_SAMPLES",
-            # f"protein_samples_TCGA-{STUDY}.json": "PROTEIN_SAMPLES",
-            # f"methylation_samples_TCGA-{STUDY}.json": "METHYLATION_SAMPLES" # NEW!
-    }
+    index_map = collection_names_map["index_map"]
+    sample_map = collection_names_map["sample_map"]
 
+    if len(PARTIAL_LOAD_LIST) > 0:
+        # keep only specified collections that contatins elements in PARTIAL_LOAD_LIST
+        index_map = {k:v for k,v in index_map.items() if any(item in k for item in PARTIAL_LOAD_LIST)}
+        sample_map = {k:v for k,v in sample_map.items() if any(item in k for item in PARTIAL_LOAD_LIST)}
+
+    
     # Load Omics collections
     for fname, colname in index_map.items():
         path = os.path.join(data_dir, fname)
@@ -343,19 +329,21 @@ def import_tcga_datasets(db, SKIP_LOAD=False, REPLACE_EXISTING=False):
         "projects.json": "PROJECTS",
         "samples.json": "SAMPLES",
     }
-    if not SKIP_LOAD:
-        for fname, colname in meta_map.items():
-            path = os.path.join(data_dir, fname)
-            if not os.path.exists(path):
-                print(f"{fname} not found, skipping.")
-                continue
-            print(f"\n📂 Loading {colname} from {path}...")
-            docs = _load_json_lines(path)
-            col = db.collection(colname)
-            _insert_incremental(col, docs, unique_key="_key")
+    
+    for fname, colname in meta_map.items():
+        path = os.path.join(data_dir, fname)
+        if not os.path.exists(path):
+            print(f"{fname} not found, skipping.")
+            continue
+        print(f"\n📂 Loading {colname} from {path}...")
+        docs = _load_json_lines(path)
+        col = db.collection(colname)
+        _insert_incremental(col, docs, unique_key="_key")
 
 #%%
-
+db = setup_arangodb_connection(db_name)
+create_tcga_collections(db)
+#%%
 if __name__ == "__main__":
     print("=" * 50)
     print("ARANGODB IMPORT SCRIPT - TCGA DATASETS (v4.2)")
@@ -369,24 +357,31 @@ if __name__ == "__main__":
         create_tcga_collections(db)
         
         # 3. Importazione Dati TCGA
-        import_tcga_datasets(db, 
-                             SKIP_LOAD=False, # Set to True to skip loading ALL existing collections
-                             REPLACE_EXISTING=True)  # Set to True, True if you want to skip and replace
+        import_tcga_datasets(db, PARTIAL_LOAD_LIST=[
+            "gene_expression",
+            "cnv",
+            "mirna", 
+            "protein",
+            "methylation"],
+            REPLACE_EXISTING=True)  
         
         print("\n✓ TCGA datasets import completed.")
     else:
         print("✗ Failed to connect to ArangoDB. Please check if ArangoDB is running.")
 
 # %%
+# db = setup_arangodb_connection(db_name)
 
 # check collections and number of documents
 if db:
     # show db create_tcga_collections
     print("\n--- Collections in database ---")
     for col_name in db.collections():
+        if col_name['name'].startswith('_'):
+            continue
         collection = db.collection(col_name['name'])
-        count = collection.count()
-        # print(f"Collection: {col_name['name']}, Documents: {str(count['count'])}")
-        print(collection)
+        count = db.collection(col_name['name']).count()
+        print(f"Collection: {col_name['name']}, Documents: {count}")
+
+
 #%%
-print(os.path.exists(os.path.join(data_dir, "gene_expression_index.json")))

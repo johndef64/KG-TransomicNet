@@ -1,6 +1,7 @@
 .vscode/
 *__pycache__*
 scripts/__pycache__/*
+scripts/archive*
 
 
 # ignore all files in data directory
@@ -9,6 +10,7 @@ data/omics/maps/temp/biomart_gene_mappings_chr*
 data/omics/TCGA*
 data/prior*
 temp_dir/*
+*backup*gi
 
 # ignore docs
 framework-docs/*
@@ -28,6 +30,7 @@ data/pkt/builds/v2*
 data/pkt/builds/v3.0.2.owl*
 data/pkt/builds/pkt*
 data/pkt/builds/Phe*
+*mappings_chr*
 
 #  specific files
 data/pkt/kg_ana*
@@ -54,7 +57,7 @@ scripts/pkt_read.pickle*
 *.nt
 #*.csv
 *.lnk
-*.zip
+# *.zip
 *.gz
 *.7z
 *.probemap
