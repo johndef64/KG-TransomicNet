@@ -369,7 +369,9 @@ if __name__ == "__main__":
         create_tcga_collections(db)
         
         # 3. Importazione Dati TCGA
-        import_tcga_datasets(db, SKIP_LOAD=True, REPLACE_EXISTING=True)  # Set to True, True if you want to skip and replace
+        import_tcga_datasets(db, 
+                             SKIP_LOAD=False, # Set to True to skip loading ALL existing collections
+                             REPLACE_EXISTING=True)  # Set to True, True if you want to skip and replace
         
         print("\n✓ TCGA datasets import completed.")
     else:
