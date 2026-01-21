@@ -1,10 +1,5 @@
 #%%
-
-
 """
-
-
-
 """
 
 from sqlalchemy import null
@@ -18,17 +13,6 @@ pkt_nodelabels_path = "../data/pkt/builds/v3.0.2/PKT_NodeLabels_with_metadata_v3
 pkt_nodelabels = pd.read_csv(pkt_nodelabels_path, dtype=str)
 pkt_nodelabels['bioentity_type'].value_counts()
 #%%
-
-"""
-in teoria sono mappabili su PKT
-bioentity_type --> node property:
-- gene --> entrez_id
-- protein --> uniprot_id
-- variant --> rsid
-- disease --> mondo_id
-- phenotype --> hp_id
-"""
-
 # serch in "db_connection" for collection "nodes"in nodes containing "tumor or cancer ion labels"
 nodes = get_nodes_by_pattern(db_connection, "nodes", "label", "%tumor%")
 nodes += get_nodes_by_pattern(db_connection, "nodes", "label", "%cancer%")
@@ -146,7 +130,7 @@ def get_data_structure_info(collection_name):
  'n_cases': 1098,
  'n_samples': 1255}
 """
-get_data_structure_info("PROJECTS")
+# get_data_structure_info("PROJECTS")
 
 """ SAMPLES document example:
 {'_key': 'TCGA-BH-A0W3-01A',
@@ -165,7 +149,7 @@ get_data_structure_info("PROJECTS")
  'days_to_collection': 85,
  'entity_type': 'sample'}
 """
-get_data_structure_info("SAMPLES")
+# get_data_structure_info("SAMPLES")
 
 """ GENES  document example:
 {'_key': 'ENSG00000290825',
@@ -200,7 +184,7 @@ get_data_structure_info("SAMPLES")
  'source': 'Ensembl_BioMart',
  'source_version': 'GRCh38.v36'}
 """
-get_data_structure_info("GENES")
+# get_data_structure_info("GENES")
 
 """ GENE_EXPRESSION_SAMPLES document example:
 {'_key': 'TCGA-D8-A146-01A',
@@ -225,7 +209,7 @@ get_data_structure_info("GENES")
   ]
 }
 """
-get_data_structure_info("GENE_EXPRESSION_SAMPLES")
+# get_data_structure_info("GENE_EXPRESSION_SAMPLES")
 
 """  GENE_EXPRESSION_INDEX document example:
 
@@ -249,20 +233,70 @@ get_data_structure_info("GENE_EXPRESSION_SAMPLES")
    'hgnc_symbol': 'PAFAH1B1'},
   {...}
 """
-get_data_structure_info("GENE_EXPRESSION_INDEX")
+# get_data_structure_info("GENE_EXPRESSION_INDEX")
 
-#%%
 """ CNV_SAMPLES document example:
-
+{'_key': 'TCGA-D8-A1XU-01A',
+ '_id': 'CNV_SAMPLES/TCGA-D8-A1XU-01A',
+ '_rev': '_k7ty2ii---',
+ 'sample_id': 'TCGA-D8-A1XU-01A',
+ 'cohort': 'TCGA-BRCA',
+ 'data_type': 'cnv_vector',
+ 'cnv_index_ref': 'cnv_index/cnv_index_TCGA-BRCA',
+ 'analysis_method': 'ASCAT3',
+ 'n_genes': 60623,
+ 'values_copy_number': [None,
+  None,
+  None,
+  None,
+  2,
+  2,
+  2,
+  2,
+...
+  2,
+  2,
+  2,
+  2,
+  ...]}
 """
-get_data_structure_info("CNV_SAMPLES")
-#%%
+# get_data_structure_info("CNV_SAMPLES")
+
 """ CNV_INDEX document example:
-
+{'_key': 'cnv_index_TCGA-BRCA',
+ '_id': 'CNV_INDEX/cnv_index_TCGA-BRCA',
+ '_rev': '_k7uFnie---',
+ 'cohort': 'TCGA-BRCA',
+ 'data_type': 'cnv_index',
+ 'n_genes': 60623,
+ 'analysis_method': 'ASCAT3',
+ 'gene_mappings': [{'position': 0,
+   'gene_id_ensembl': 'ENSG00000223972.5',
+   'gene_id_base': 'ENSG00000223972',
+   'gene_ref': 'genes/ENSG00000223972',
+   'entrez_id': '100287102',
+   'enst_ids': ['ENST00000450305']},
+  {'position': 1,
+   'gene_id_ensembl': 'ENSG00000227232.5',
+   'gene_id_base': 'ENSG00000227232',
+   'gene_ref': 'genes/ENSG00000227232',
+   'entrez_id': '653635',
+   'enst_ids': ['ENST00000488147']},
+  {'position': 2,
+   'gene_id_ensembl': 'ENSG00000278267.1',
+   'gene_id_base': 'ENSG00000278267',
+   'gene_ref': 'genes/ENSG00000278267',
+   'entrez_id': '102466751',
+   'enst_ids': ['ENST00000619216']},
+...
+   'gene_ref': 'genes/ENSG00000230523',
+   'entrez_id': '101928460',
+   'enst_ids': ['ENST00000417651']},
+  ...],
+ 'description': 'Gene position mapping for CNV vectors in sample documents'}
 """
-get_data_structure_info("CNV_INDEX")
+# get_data_structure_info("CNV_INDEX")
 
-# %%
 """METHYLATION_SAMPLES document example:
 {'_key': 'TCGA-A7-A0CD-01A',
  '_id': 'METHYLATION_SAMPLES/TCGA-A7-A0CD-01A',
@@ -296,7 +330,7 @@ get_data_structure_info("CNV_INDEX")
  'value_range': '[0.0, 1.0]',
  'description': 'Beta values representing methylation levels at CpG sites'}
 """
-get_data_structure_info("METHYLATION_SAMPLES")
+# get_data_structure_info("METHYLATION_SAMPLES")
 
 """ METHYLATION_INDEX document example:
 {'_key': 'methylation_index_TCGA-BRCA',
@@ -331,9 +365,8 @@ get_data_structure_info("METHYLATION_SAMPLES")
   ...],
  'description': 'CpG probe position mapping for methylation beta value vectors in sample documents'}
 """
-get_data_structure_info("METHYLATION_INDEX")
+# get_data_structure_info("METHYLATION_INDEX")
 
-#%%
 """ MIRNA_SAMPLES document example:
 {'_key': 'TCGA-D8-A146-01A',
  '_id': 'MIRNA_SAMPLES/TCGA-D8-A146-01A',
@@ -358,22 +391,103 @@ get_data_structure_info("METHYLATION_INDEX")
   0,
   ...]}
 """
-get_data_structure_info("MIRNA_SAMPLES")
+# get_data_structure_info("MIRNA_SAMPLES")
 
 """ MIRNA_INDEX document example:
-
+{'_key': 'mirna_index_TCGA-BRCA',
+ '_id': 'MIRNA_INDEX/mirna_index_TCGA-BRCA',
+ '_rev': '_k7uFnqq---',
+ 'cohort': 'TCGA-BRCA',
+ 'data_type': 'mirna_index',
+ 'n_mirnas': 1881,
+ 'platform': 'Illumina',
+ 'mirna_mappings': [{'position': 0,
+   'mirna_id': 'hsa-let-7a-1',
+   'mirbase_id': 'hsa-let-7a-1',
+   'hgnc_symbol': 'MIRLET7A-1',
+   'description': 'miRNA hsa-let-7a-1'},
+  {'position': 1,
+   'mirna_id': 'hsa-let-7a-2',
+   'mirbase_id': 'hsa-let-7a-2',
+   'hgnc_symbol': 'MIRLET7A-2',
+   'description': 'miRNA hsa-let-7a-2'},
+  {'position': 2,
+   'mirna_id': 'hsa-let-7a-3',
+   'mirbase_id': 'hsa-let-7a-3',
+   'hgnc_symbol': 'MIRLET7A-3',
+   'description': 'miRNA hsa-let-7a-3'},
+  {'position': 3,
+   'mirna_id': 'hsa-let-7b',
+   'mirbase_id': 'hsa-let-7b',
+...
+   'mirbase_id': 'hsa-mir-4717',
+   'hgnc_symbol': 'MIR4717',
+   'description': 'miRNA hsa-mir-4717'},
+  ...],
+ 'description': 'miRNA position mapping for expression vectors in sample documents'}
 """
-get_data_structure_info("MIRNA_INDEX")
+# get_data_structure_info("MIRNA_INDEX")
 
 """ PROTEIN_SAMPLES document example:
-
+{'_key': 'TCGA-WT-AB41-01A',
+ '_id': 'PROTEIN_SAMPLES/TCGA-WT-AB41-01A',
+ '_rev': '_k7tzEcK---',
+ 'sample_id': 'TCGA-WT-AB41-01A',
+ 'cohort': 'TCGA-BRCA',
+ 'data_type': 'protein_vector',
+ 'protein_index_ref': 'protein_index/protein_index_TCGA-BRCA',
+ 'platform': 'RPPA',
+ 'n_proteins': 487,
+ 'values_abundance': [0.06515,
+  0.051282,
+  0.23858,
+  0.62398,
+  -0.39313,
+  0.7282,
+  -0.15681,
+...
+  -0.32683,
+  0.1320667,
+  -0.1346183,
+  1.442465,
+  0]}
 """
-get_data_structure_info("PROTEIN_SAMPLES")
+# get_data_structure_info("PROTEIN_SAMPLES")
 
 """ PROTEIN_INDEX document example:
-
+{'_key': 'protein_index_TCGA-BRCA',
+ '_id': 'PROTEIN_INDEX/protein_index_TCGA-BRCA',
+ '_rev': '_k7uFnru---',
+ 'cohort': 'TCGA-BRCA',
+ 'data_type': 'protein_index',
+ 'n_proteins': 487,
+ 'platform': 'RPPA',
+ 'protein_mappings': [{'position': 0,
+   'peptide_target': '1433BETA',
+   'entrez_id': '7529',
+   'gene_symbol': 'YWHAB',
+   'protein_type': 'Total'},
+  {'position': 1,
+   'peptide_target': '1433EPSILON',
+   'entrez_id': '7531',
+   'gene_symbol': 'YWHAE',
+   'protein_type': 'Total'},
+  {'position': 2,
+   'peptide_target': '1433ZETA',
+   'entrez_id': '7534',
+   'gene_symbol': 'YWHAZ',
+   'protein_type': 'Total'},
+  {'position': 3,
+   'peptide_target': '4EBP1',
+   'entrez_id': '1977',
+...
+   'peptide_target': 'ZEB1',
+   'entrez_id': '9708',
+   'gene_symbol': 'ZEB1',
+   'protein_type': 'Total'}],
+ 'description': 'Protein/peptide position mapping for RPPA vectors in sample documents'}
 """
-get_data_structure_info("PROTEIN_INDEX")
+# get_data_structure_info("PROTEIN_INDEX")
 
 #%%
 """
