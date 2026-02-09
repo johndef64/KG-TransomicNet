@@ -5,6 +5,59 @@ Supports: Gene Expression, CNV, Methylation, miRNA, Protein data.
 
 from typing import Optional, List, Dict, Any, Union
 
+# GENE DATA QUERIES
+def get_gene_info(db_connection, entrez_id: str = None, 
+                  hgnc_symbol: str = None,
+                    ensembl_id: str = None) -> Optional[Dict]:
+    """
+    Retrieve gene information by various identifiers.
+    
+    Args:
+        db_connection: ArangoDB database connection
+        entrez_id: Entrez gene ID
+        hgnc_symbol: HGNC gene symbol
+        ensembl_id: Ensembl gene ID base
+    
+    Returns:
+        Gene information dict or None if not found
+    """
+    aql = """
+    FOR g IN GENES
+        FILTER (@entrezId != null AND g.entrez_id == @entrezId)
+            OR (@hgncSymbol != null AND g.hgnc_symbol == @hgncSymbol)
+            OR (@ensemblId != null AND g.ensembl_id_base == @ensemblId)
+        RETURN g
+    """
+    bind_vars = {
+        "entrezId": entrez_id,
+        "hgncSymbol": hgnc_symbol,
+        "ensemblId": ensembl_id
+    }
+    result = list(db_connection.aql.execute(aql, bind_vars=bind_vars))
+    return result[0] if result else None
+
+def get_data_structure_info(db_connection, collection_name):
+    """
+    get dict atrigutes kyes and values  from on entry in collection_name
+    """
+    aql_query = f"""
+    FOR doc IN {collection_name}
+      LIMIT 1
+      RETURN doc
+    """
+    result = db_connection.aql.execute(aql_query)
+    for doc in result:
+        return doc
+
+def test_query(db_connection, query_aql):
+    result = db_connection.aql.execute(query_aql)
+    for doc in result:
+        return doc
+
+
+
+
+
 # =============================================================================
 # GENE EXPRESSION QUERIES
 # =============================================================================
@@ -155,6 +208,96 @@ def get_gene_expression_matrix(db_connection, cohort: str,
         "genes": gene_list,
         "matrix": [r["values"] for r in results]
     }
+
+
+def get_genes_vector_json(index_data, id_type = None):
+    """
+    Get genes vector by position from index data. for the requested id type :
+    'gene_id_ensembl'
+    "gene_id_base'
+    "entrez_id"
+    """
+    # get the index_data.keys() that contains '_mappings'
+    mapping_keys = [key for key in index_data.keys() if '_mappings' in key]
+    mapping_data = index_data[mapping_keys[0]]
+    if id_type in mapping_data[0].keys():
+      genes_vector = []
+      for mapping in mapping_data:
+        genes_vector.append(mapping[id_type])
+      return genes_vector
+    else:
+        options = []
+        for mapping in mapping_data:
+            for key in mapping.keys():
+                if key not in options:
+                    options.append(key)
+        print(f"  Warning: Please provide id_type among available options:")
+        for opt in options:
+            print(f" - {opt}")
+        return []
+
+def get_gene_vector(db_connection, cohort: str,
+                     id_type: str = "entrez_id",
+                     INDEX = "GENE_EXPRESSION_INDEX") -> List[str]:
+    """
+    Get ordered vector of gene identifiers from expression index for a cohort.
+    
+    Args:
+        db_connection: ArangoDB database connection
+        cohort: TCGA cohort (e.g., "TCGA-BRCA")
+        id_type: Type of gene identifier to retrieve. Options include:
+                 - "entrez_id"
+                 - "hgnc_symbol" 
+                 - "gene_id_base" (Ensembl base ID)
+                 - "gene_id_ensembl" (full Ensembl ID)
+    
+    Returns:
+        List of gene identifiers ordered by position in expression vectors
+    """
+    # Build index key based on the INDEX collection type
+    # Map INDEX collection names to their key prefixes and mapping field names
+    index_config_map = {
+        "GENE_EXPRESSION_INDEX": {"prefix": "expr", "mapping_field": "gene_mappings"},
+        "CNV_INDEX": {"prefix": "cnv", "mapping_field": "gene_mappings"},
+        "METHYLATION_INDEX": {"prefix": "methylation", "mapping_field": "probe_mappings"},
+        "MIRNA_INDEX": {"prefix": "mirna", "mapping_field": "mirna_mappings"},
+        "PROTEIN_INDEX": {"prefix": "protein", "mapping_field": "protein_mappings"}
+    }
+    
+    config = index_config_map.get(INDEX, {"prefix": "expr", "mapping_field": "gene_mappings"})
+    index_key = f"{config['prefix']}_index_{cohort}"
+    mapping_field = config['mapping_field']
+    
+    aql = f"""
+    LET idx = DOCUMENT("{INDEX}", @indexKey)
+    RETURN idx.{mapping_field}
+    """
+    
+    bind_vars = {"indexKey": index_key}
+    result = list(db_connection.aql.execute(aql, bind_vars=bind_vars))
+    
+    if not result or not result[0]:
+        print(f"  Warning: No index found for {INDEX} in cohort {cohort}")
+        return []
+    
+    mapping_data = result[0]
+    
+    # Check if requested id_type exists in the data
+    if mapping_data and id_type in mapping_data[0]:
+        # Sort by position and extract the requested id type
+        sorted_mappings = sorted(mapping_data, key=lambda x: x.get('position', 0))
+        genes_vector = [mapping[id_type] for mapping in sorted_mappings]
+        return genes_vector
+    else:
+        # Collect available options
+        options = set()
+        if mapping_data:
+            for mapping in mapping_data:
+                options.update(mapping.keys())
+        
+        print(f"  Warning: id_type '{id_type}' not found in gene mappings.")
+        print(f"  Available options: {', '.join(sorted(options))}")
+        return []
 
 
 # =============================================================================
@@ -477,3 +620,35 @@ def get_sample_full_profile(db_connection, sample_id: str, cohort: str) -> Dict:
     bind_vars = {"sampleId": sample_id, "cohort": cohort}
     result = list(db_connection.aql.execute(aql, bind_vars=bind_vars))
     return result[0] if result else {}
+
+
+def get_sample_list_intersection(multiomics_data):
+    """
+    Get the intersection of sample IDs across all omics types.
+    Handles different data structures and skips empty/invalid data.
+    """
+    sets = []
+    for omic_type, data in multiomics_data.items():
+        # Skip non-omics keys like 'gene', 'cohort', etc.
+        if omic_type in ['gene', 'cohort']:
+            continue
+            
+        # Handle different data structures
+        if isinstance(data, dict):
+            # Methylation case: {'samples': [...], ...}
+            if 'samples' in data and isinstance(data['samples'], list) and data['samples']:
+                # Extract sample_id from each dict in the samples list
+                sample_ids = [entry.get('sample_id') for entry in data['samples'] if isinstance(entry, dict) and 'sample_id' in entry]
+                if sample_ids:
+                    sets.append(set(sample_ids))
+        elif isinstance(data, list):
+            # Expression, CNV, Protein case: list of dicts with 'sample_id'
+            if data:  # Only process non-empty lists
+                sample_ids = [entry.get('sample_id') for entry in data if isinstance(entry, dict) and 'sample_id' in entry]
+                if sample_ids:
+                    sets.append(set(sample_ids))
+    
+    # Return intersection only if we have at least one set
+    if sets:
+        return set.intersection(*sets)
+    return set()
