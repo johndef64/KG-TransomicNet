@@ -1,3 +1,4 @@
+#%%
 #!/usr/bin/env python3
 
 """
@@ -630,7 +631,7 @@ class SampleCentricVectorBuilder(CollectionBuilder):
         
         Each sample document contains:
         - sample_id (key)
-        - expression_index_ref (reference to index collection)
+        - expression_index_ref (reference to index)
         - values_counts, values_fpkm, values_tpm (parallel vectors)
         
         Advantages:
@@ -662,7 +663,7 @@ class SampleCentricVectorBuilder(CollectionBuilder):
                 "sample_id": sample_id,
                 "cohort": self.study,
                 "data_type": "gene_expression_vector",
-                "expression_index_ref": f"expression_index/expr_index_{self.study}",
+                "expression_index_ref": f"expr_index_{self.study}",
                 "platform": "STAR",
                 "n_genes": len(tpm_vector),
                 
@@ -694,7 +695,7 @@ class SampleCentricVectorBuilder(CollectionBuilder):
                 "sample_id": sample_id,
                 "cohort": self.study,
                 "data_type": "cnv_vector",
-                "cnv_index_ref": f"cnv_index/cnv_index_{self.study}",
+                "cnv_index_ref": f"cnv_index_{self.study}",
                 "analysis_method": "ASCAT3",
                 "n_genes": len(cnv_vector),
                 "values_copy_number": cnv_vector
@@ -737,7 +738,7 @@ class SampleCentricVectorBuilder(CollectionBuilder):
                 "sample_id": sample_id,
                 "cohort": self.study,
                 "data_type": "methylation_vector",
-                "methylation_index_ref": f"methylation_index/methylation_index_{self.study}",
+                "methylation_index_ref": f"methylation_index_{self.study}",
                 "platform": "Illumina HumanMethylation27",
                 "n_probes": len(beta_vector),
                 "values_beta": beta_vector,
@@ -766,7 +767,7 @@ class SampleCentricVectorBuilder(CollectionBuilder):
                 "sample_id": sample_id,
                 "cohort": self.study,
                 "data_type": "mirna_vector",
-                "mirna_index_ref": f"mirna_index/mirna_index_{self.study}",
+                "mirna_index_ref": f"mirna_index_{self.study}",
                 "platform": "Illumina",
                 "n_mirnas": len(mirna_vector),
                 "values_expression": mirna_vector
@@ -793,7 +794,7 @@ class SampleCentricVectorBuilder(CollectionBuilder):
                 "sample_id": sample_id,
                 "cohort": self.study,
                 "data_type": "protein_vector",
-                "protein_index_ref": f"protein_index/protein_index_{self.study}",
+                "protein_index_ref": f"protein_index_{self.study}",
                 "platform": "RPPA",
                 "n_proteins": len(protein_vector),
                 "values_abundance": protein_vector
@@ -898,6 +899,10 @@ class MetadataLayerBuilder(CollectionBuilder):
 # MAIN EXECUTION PIPELINE v4
 # ========================================================================
 
+# mapping_dfs = load_mappings()
+# #%%
+# mapping_dfs["mondo"]
+#%%
 def main():
     """Main execution pipeline for loading TCGA data into ArangoDB collections (v4)."""
     logger.info("=" * 70)
@@ -910,9 +915,9 @@ def main():
     # STEP tester
     STEP1 = True   # Load Mappings
     STEP2 = False  # Semantic Layer - GENES
-    STEP3 = False  # Semantic Layer - PROJECT
+    STEP3 = True  # Semantic Layer - PROJECT
     STEP4 = False  # Metadata Layer - SAMPLES & CASES
-    STEP5 = True  # Quantitative Index Layer - GENE_EXPRESSION_INDEX
+    STEP5 = False  # Quantitative Index Layer - GENE_EXPRESSION_INDEX
     STEP6 = False  # Quantitative Vector Layer - GENE_EXPRESSION_SAMPLES
     STEP7 = False  # CNV Index & Vectors
     STEP8 = False  # miRNA Index & Vectors
@@ -929,11 +934,13 @@ def main():
     # Initialize builders
     index_builder = QuantitativeIndexBuilder(STUDY, mapping_dfs, lookups)
     vector_builder = SampleCentricVectorBuilder(STUDY, mapping_dfs, lookups)
+    clinical_df = load_omics_data("clinical")
+    semantic_builder = SemanticLayerBuilder(STUDY, mapping_dfs, lookups)
     
     # ========== STEP 2: Semantic Layer - GENES ==========
     if STEP2 or ALL_STEPS:
         logger.info("[Step 2/10] Building Semantic Layer - GENES...")
-        semantic_builder = SemanticLayerBuilder(STUDY, mapping_dfs, lookups)
+        
         genes_collection = semantic_builder.build_gene_nodes()
         semantic_builder.save_collection(genes_collection, "genes")
         logger.info("")
@@ -946,12 +953,17 @@ def main():
         # Add to clinical_df, mondo_id column from mapping file
         if clinical_df is not None and "mondo" in mapping_dfs:
             mondo_map = mapping_dfs["mondo"]
-            clinical_df = clinical_df.merge(mondo_map[['_disease_type', 'mondo_id']],
+            mondo_cols = ['_disease_type', 'mondo_id']
+            if all(col in mondo_map.columns for col in mondo_cols):
+                clinical_df = clinical_df.merge(
+                                        mondo_map[['_disease_type', 'mondo_id']],
                                            left_on='disease_type.project',
                                            right_on='_disease_type',
                                            how='left')
-            clinical_df.drop(columns=['_disease_type'], inplace=True)
-            print(f"  Merged mondo_id into clinical_df, new shape: {clinical_df.shape}")
+                clinical_df.drop(columns=['_disease_type'], inplace=True)
+                # save clinical_df to output path for inspection
+                clinical_df.to_csv(os.path.join(OUTPUT_PATH, f"{STUDY}_clinical_with_mondo.csv"), index=False)
+                print(f"  Merged mondo_id into clinical_df, new shape: {clinical_df.shape}")
         
         if clinical_df is not None:
             project_collection = semantic_builder.build_project_node(clinical_df)

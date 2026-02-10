@@ -1,3 +1,4 @@
+#%%
 """
 Utility functions for querying omics data from ArangoDB.
 Supports: Gene Expression, CNV, Methylation, miRNA, Protein data.
@@ -58,36 +59,438 @@ OMIC_CONFIG = {
     }
 }
 
+
+KG_CONFING = {
+ "nodes": {
+    "key": "_key",
+    "uri": "uri",
+    "label": "label",
+    "bioentity_type": "bioentity_type",
+    "class_code": "class_code"
+ },
+ "edges": {
+    "key": "_key",
+    "uri": "uri",
+    "label": "label",
+    "predicate_label": "predicate_label",
+    "source": "_from",
+    "target": "_to"
+ }
+}
+
+
+# =============================================================================
+# KNOWLEDGE GRAPH QUERIES
+# =============================================================================
+
+# basic KG functions
+
+def get_key_value_counts(db_connection, collection_name: str, key: str, limit: int = None, verbose = True) -> Dict[str, int]:
+    """
+    Get all unique values for a key in a collection with occurrence counts.
+    
+    Args:
+        db_connection: ArangoDB database connection
+        collection_name: Name of the collection to query (e.g., "nodes", "edges")
+        key: The document key/field to aggregate (e.g., "bioentity_type", "predicate_label")
+        limit: Optional limit on number of distinct values to return
+    
+    Returns:
+        Dict mapping each unique value to its count, sorted by count descending
+    """
+    limit_clause = f"LIMIT {limit}" if limit else ""
+    
+    aql = f"""
+    FOR doc IN {collection_name}
+        FILTER doc.@key != null
+        COLLECT value = doc.@key WITH COUNT INTO count
+        SORT count DESC
+        {limit_clause}
+        RETURN {{value: value, count: count}}
+    """
+    
+    bind_vars = {"key": key}
+    results = list(db_connection.aql.execute(aql, bind_vars=bind_vars))
+    if verbose:
+        print(f"Unique values for '{key}' in '{collection_name}':")
+        for r in results:
+            print(f"  {r['value']}: {r['count']}")
+
+    return {r["value"]: r["count"] for r in results}
+
+
+def get_node_by_key(db_connection, node_key: str) -> Optional[Dict]:
+    """
+    Get a node document by its _key.
+    
+    Args:
+        db_connection: ArangoDB database connection
+        node_key: The _key of the node (e.g., "80724")
+    
+    Returns:
+        Node document or None if not found
+    """
+    aql = """
+    FOR n IN nodes
+        FILTER n._key == @nodeKey
+        RETURN n
+    """
+    result = list(db_connection.aql.execute(aql, bind_vars={"nodeKey": node_key}))
+    return result[0] if result else None
+
+
+def get_node_by_uri(db_connection, uri: str) -> Optional[Dict]:
+    """
+    Get a node document by its URI.
+    
+    Args:
+        db_connection: ArangoDB database connection
+        uri: The URI of the node
+    
+    Returns:
+        Node document or None if not found
+    """
+    aql = """
+    FOR n IN nodes
+        FILTER n.uri == @uri
+        RETURN n
+    """
+    result = list(db_connection.aql.execute(aql, bind_vars={"uri": uri}))
+    return result[0] if result else None
+
+def get_node_by_chosen_field(db_connection, field_name: str, field_value: str, 
+                              limit: int = 100, verbose: bool = True) -> Union[Optional[Dict], List[Dict]]:
+    """
+    Get a node document by a chosen field and value.
+    
+    Args:
+        db_connection: ArangoDB database connection
+        field_name: The name of the field to filter by (e.g., "label", "class_code", "bioentity_type")
+        field_value: The value to match in the specified field (supports '*' wildcard for regex)
+        limit: Maximum number of results to return (for regex searches)
+        verbose: Whether to print debug information
+    
+    Returns:
+        Node document or None if not found (exact match)
+        List of matching nodes if wildcard pattern is used
+    
+    Examples:
+        get_node_by_chosen_field(db, "label", "TP53 (human)")     # Exact match
+        get_node_by_chosen_field(db, "label", "BRCA*")            # All labels starting with BRCA
+        get_node_by_chosen_field(db, "class_code", "EntrezID")    # All EntrezID nodes
+        get_node_by_chosen_field(db, "bioentity_type", "*RNA*")   # Any bioentity containing RNA
+    """
+    # Check if field_value contains wildcard for regex search
+    use_regex = '*' in field_value
+    
+    if use_regex:
+        # Convert wildcard pattern to regex: '*' -> '.*'
+        regex_pattern = '^' + field_value.replace('*', '.*') + '$'
+        
+        aql = """
+        FOR n IN nodes
+            FILTER REGEX_TEST(n.@fieldName, @regexPattern, true)
+            LIMIT @limit
+            RETURN n
+        """
+        bind_vars = {
+            "fieldName": field_name,
+            "regexPattern": regex_pattern,
+            "limit": limit
+        }
+        result = list(db_connection.aql.execute(aql, bind_vars=bind_vars))
+        
+        if verbose:
+            print(f"Found {len(result)} nodes matching '{field_name}' ~ '{field_value}'")
+            if result and len(result) <= 10:
+                for r in result:
+                    print(f"  - {r.get('_key')}: {r.get('label', 'N/A')}")
+            elif result:
+                print(f"  (showing first 10 of {len(result)})")
+                for r in result[:10]:
+                    print(f"  - {r.get('_key')}: {r.get('label', 'N/A')}")
+        
+        return result  # Return list for regex matches
+    else:
+        # Exact match query
+        aql = """
+        FOR n IN nodes
+            FILTER n.@fieldName == @fieldValue
+            LIMIT 1
+            RETURN n
+        """
+        bind_vars = {
+            "fieldName": field_name,
+            "fieldValue": field_value
+        }
+        result = list(db_connection.aql.execute(aql, bind_vars=bind_vars))
+        
+        if verbose and result:
+            print(f"Found node: {result[0].get('_key')} - {result[0].get('label', 'N/A')}")
+        elif verbose:
+            print(f"No node found with {field_name} = '{field_value}'")
+        
+        return result[0] if result else None
+
+def get_edges_by_predicate(db_connection, predicate_label: str, limit: int = 100) -> List[Dict]:
+    """
+    Get edges filtered by predicate label.
+    
+    Args:
+        db_connection: ArangoDB database connection
+        predicate_label: The predicate label to filter by (e.g., "has gene product")
+        limit: Maximum number of edges to return
+    
+    Returns:
+        List of edge documents
+    """
+    aql = """
+    FOR e IN edges
+        FILTER e.predicate_label == @predicateLabel
+        LIMIT @limit
+        RETURN e
+    """
+    bind_vars = {"predicateLabel": predicate_label, "limit": limit}
+    return list(db_connection.aql.execute(aql, bind_vars=bind_vars))
+
+def get_node_neighbors(db_connection, node_key: str, direction: str = "any", limit: int = 100) -> List[Dict]:
+    """
+    Get neighboring nodes connected to a given node.
+    
+    Args:
+        db_connection: ArangoDB database connection
+        node_key: The _key of the source node
+        direction: "outbound", "inbound", or "any"
+        limit: Maximum number of neighbors to return
+    
+    Returns:
+        List of dicts with edge and neighbor node info
+    """
+    direction_map = {"outbound": "OUTBOUND", "inbound": "INBOUND", "any": "ANY"}
+    dir_clause = direction_map.get(direction, "ANY")
+    
+    aql = f"""
+    FOR v, e IN 1..1 {dir_clause} CONCAT("nodes/", @nodeKey) edges
+        LIMIT @limit
+        RETURN {{
+            edge: e,
+            neighbor: v
+        }}
+    """
+    bind_vars = {"nodeKey": node_key, "limit": limit}
+    return list(db_connection.aql.execute(aql, bind_vars=bind_vars))
+
+def search_nodes(db_connection, bioentity_type: str = None, 
+                 class_code: str = None, 
+                 label_contains: str = None,
+                 limit: int = 100) -> List[Dict]:
+    """
+    Search nodes by various criteria.
+    
+    Args:
+        db_connection: ArangoDB database connection
+        bioentity_type: Filter by bioentity type (e.g., "gene", "protein")
+        class_code: Filter by class code (e.g., "EntrezID", "PR")
+        label_contains: Filter nodes whose label contains this substring
+        limit: Maximum number of nodes to return
+    
+    Returns:
+        List of matching node documents
+    """
+    filters = []
+    bind_vars = {"limit": limit}
+    
+    if bioentity_type:
+        filters.append("n.bioentity_type == @bioentityType")
+        bind_vars["bioentityType"] = bioentity_type
+    if class_code:
+        filters.append("n.class_code == @classCode")
+        bind_vars["classCode"] = class_code
+    if label_contains:
+        filters.append("CONTAINS(LOWER(n.label), LOWER(@labelContains))")
+        bind_vars["labelContains"] = label_contains
+    
+    filter_clause = "FILTER " + " AND ".join(filters) if filters else ""
+    
+    aql = f"""
+    FOR n IN nodes
+        {filter_clause}
+        LIMIT @limit
+        RETURN n
+    """
+    return list(db_connection.aql.execute(aql, bind_vars=bind_vars))
+
+
+""" [KG COLLECTION SAMPLES]
+
+"edge" collections:
+_id:edges/edge_0
+_rev:_kneF6ZO---
+_key:edge_0
+_from:nodes/80724
+_to:nodes/PR_Q6JQN1
+{
+  "source_uri": "http://www.ncbi.nlm.nih.gov/gene/80724",
+  "target_uri": "http://purl.obolibrary.org/obo/PR_Q6JQN1",
+  "predicate_uri": "http://purl.obolibrary.org/obo/RO_0002205",
+  "predicate_label": "has gene product",
+  "predicate_class_code": "RO",
+  "predicate_bioentity_type": "phenotype",
+  "predicate_source": "Relation Ontology"
+}
+
+Unique values for 'predicate_class_code' in 'edges':
+  RO: 6362632
+  RDF: 4521549
+  BFO: 119618
+  chebi: 41661
+  pr: 19848
+  CLO: 11629
+  VO: 2628
+  so: 628
+  BSPO: 522
+  core: 473
+  mondo: 369
+  MONDO: 163
+  pw: 136
+  pato: 125
+  cl: 38
+  SIO: 38
+  EFO: 33
+  [...]
+
+
+-------------------------------
+"nodes" collections:
+_id:nodes/80724
+_rev:_kneFK2G---
+_key:80724
+{
+  "uri": "http://www.ncbi.nlm.nih.gov/gene/80724",
+  "namespace": "www.ncbi.nlm.nih.gov",
+  "entity_id": "80724",
+  "class_code": "EntrezID",
+  "label": "ACAD10 (human)",
+  "bioentity_type": "gene",
+  "description": "A protein coding gene ACAD10 in human.",
+  "synonym": "",
+  "source": "NCBI Entrez Gene",
+  "source_type": "Database",
+  "integer_id": 1
+}
+
+Unique values for 'class_code' in 'nodes':
+  ENST: 190613  
+  CHEBI: 149902
+  PR: 96085  
+  GO: 43821
+  CLO: 41738
+  EntrezID: 26502 
+  MONDO: 22305   
+  HP: 16271
+  UBERON: 14168
+  R-HSA: 13504
+  VO: 6240
+  PW: 2598
+  CL: 2365
+  SO: 2362
+  NCBITaxon: 2067
+  unknown: 929
+  DOID: 927
+  GNO: 796
+  PATO: 572
+  ENVO: 397
+  R-NUL: 278
+  CHR: 249
+  ECTO: 171
+  NBO: 164
+  FOODON: 162
+  EFO: 144
+  MOD: 91
+  MPATH: 75
+  MAXO: 72
+  PO: 47
+  OGG: 30
+  NCIT_C: 27
+  HsapDv: 16
+  [...]
+"""
+
+if __name__ == "__main__":
+    from arangodb_utils import *
+    db_connection = setup_arangodb_connection("PKT_test10000")
+
+    node_class_code = get_key_value_counts(db_connection, "nodes", "class_code")
+
+    edge_class_code = get_key_value_counts(db_connection, "edges", "predicate_class_code")
+#%%
+edge_class_code
+
+
+#%%
+# =============================================================================
 # GENE DATA QUERIES
+# "GENE" collection is the pivot to map omics data to knowledge graph nodes. It contains comprehensive gene information and mappings to various identifiers.
+
+# the mapping key is in the index of every omic collection, for example in GENE_EXPRESSION collection there is a document with data_type "gene_expression_index" that contains a field "gene_mappings" which is a list of dicts with keys like "entrez_id", "hgnc_symbol", "gene_id_base", "gene_id_ensembl" and "position". The position is the index of the gene in the expression vectors of the samples in the same collection with data_type "gene_expression_vector".
+
+# to use HGCN symbol to retrive kg nodes remembver to remove "-" from the symbol, for example "MIRLET7-1" in hgnc_symbol becomes "MIRLET71" in the kg node label and in the GENES collection hgnc_symbol field.
+# =============================================================================
+
 def get_gene_info(db_connection, entrez_id: str = None, 
                   hgnc_symbol: str = None,
-                    ensembl_id: str = None) -> Optional[Dict]:
+                  ensembl_id: str = None) -> Union[Optional[Dict], List[Dict]]:
     """
     Retrieve gene information by various identifiers.
     
     Args:
         db_connection: ArangoDB database connection
         entrez_id: Entrez gene ID
-        hgnc_symbol: HGNC gene symbol
+        hgnc_symbol: HGNC gene symbol (supports '*' wildcard for regex search)
         ensembl_id: Ensembl gene ID base
     
     Returns:
-        Gene information dict or None if not found
+        Gene information dict or None if not found (exact match)
+        List of matching genes if wildcard pattern is used
+    
+    Examples:
+        get_gene_info(db, hgnc_symbol="TP53")        # Exact match
+        get_gene_info(db, hgnc_symbol="MIRLET7*")    # All MIRLET7 family genes
+        get_gene_info(db, hgnc_symbol="*MIR*")       # Any gene containing MIR
     """
-    aql = """
-    FOR g IN GENES
-        FILTER (@entrezId != null AND g.entrez_id == @entrezId)
-            OR (@hgncSymbol != null AND g.hgnc_symbol == @hgncSymbol)
-            OR (@ensemblId != null AND g.ensembl_id_base == @ensemblId)
-        RETURN g
-    """
-    bind_vars = {
-        "entrezId": entrez_id,
-        "hgncSymbol": hgnc_symbol,
-        "ensemblId": ensembl_id
-    }
-    result = list(db_connection.aql.execute(aql, bind_vars=bind_vars))
-    return result[0] if result else None
+    # Check if hgnc_symbol contains wildcard for regex search
+    use_regex = hgnc_symbol is not None and '*' in hgnc_symbol
+    
+    if use_regex:
+        # Convert wildcard pattern to regex: '*' -> '.*'
+        # Anchor pattern for full match behavior
+        regex_pattern = '^' + hgnc_symbol.replace('*', '.*') + '$'
+        
+        aql = """
+        FOR g IN GENES
+            FILTER REGEX_TEST(g.hgnc_symbol, @regexPattern, true)
+            RETURN g
+        """
+        bind_vars = {"regexPattern": regex_pattern}
+        result = list(db_connection.aql.execute(aql, bind_vars=bind_vars))
+        return result  # Return list for regex matches
+    else:
+        # Exact match query
+        aql = """
+        FOR g IN GENES
+            FILTER (@entrezId != null AND g.entrez_id == @entrezId)
+                OR (@hgncSymbol != null AND g.hgnc_symbol == @hgncSymbol)
+                OR (@ensemblId != null AND g.ensembl_id_base == @ensemblId)
+            RETURN g
+        """
+        bind_vars = {
+            "entrezId": entrez_id,
+            "hgncSymbol": hgnc_symbol,
+            "ensemblId": ensembl_id
+        }
+        result = list(db_connection.aql.execute(aql, bind_vars=bind_vars))
+        return result[0] if result else None
+
 
 def get_data_structure_info(db_connection, collection_name):
     """
@@ -107,10 +510,10 @@ def test_query(db_connection, query_aql):
     for doc in result:
         return doc
 
-
-
-
-
+info = get_gene_info(db_connection, hgnc_symbol="MIRLET7*")
+for i in info:
+    print(i["hgnc_symbol"])
+#%%
 # =============================================================================
 # GENE EXPRESSION QUERIES
 # =============================================================================
@@ -797,3 +1200,9 @@ def get_sample_list_intersection(multiomics_data):
     if sets:
         return set.intersection(*sets)
     return set()
+
+
+# =============================================================================
+# TRANSOMIC NETWORKS QUERIES
+# la costruizione delle reti trasomiche è lo scopo finale queste funzioni servono a recuperare i dati necessari per costruire le reti trasomiche e fare analisi integrative, e rilvare pattern causalità tra i diversi livelli di dati omici e il fenotipo.
+# =============================================================================
