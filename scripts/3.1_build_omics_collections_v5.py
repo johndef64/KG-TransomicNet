@@ -923,8 +923,10 @@ def main():
     STEP8 = False  # miRNA Index & Vectors
     STEP9 = False  # Protein Index & Vectors
     STEP10 = False  # Methylation Index & Vectors (NEW!)
-    ALL_STEPS = False  # If True, run all steps
-    
+
+    ALL_STEPS = True  # If True, run all steps
+
+
     # ========== STEP 1: Load Mappings ==========
     logger.info("[Step 1/10] Loading ID mappings...")
     mapping_dfs = load_mappings()

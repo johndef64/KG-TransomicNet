@@ -2,6 +2,8 @@
 from arango import ArangoClient
 import json
 import traceback
+import sys
+import re
 
 # --- CONFIGURAZIONE ---
 db_name = 'PKT_test10000'
@@ -145,11 +147,12 @@ def import_data_to_arangodb(db_connection):
         return
     
     try:
+        
         # Load nodes
         print(f"\n📂 Loading nodes from {NODES_FILE}...")
         with open(NODES_FILE, 'r', encoding='utf-8') as f:
             nodes_data = json.load(f)
-        
+
         # Load edges
         print(f"📂 Loading edges from {EDGES_FILE}...")
         with open(EDGES_FILE, 'r', encoding='utf-8') as f:
@@ -160,7 +163,8 @@ def import_data_to_arangodb(db_connection):
         # Get collections
         nodes_collection = db_connection.collection('nodes')
         edges_collection = db_connection.collection('edges')
-        
+
+          
         # Import nodes in batches
         print(f"\n🔄 Importing nodes in batches of {BATCH_SIZE}...")
         nodes_imported = 0
@@ -178,7 +182,7 @@ def import_data_to_arangodb(db_connection):
                 print(f"  ⚠ Warning: Batch {i//BATCH_SIZE + 1} failed: {e}")
         
         print(f"✓ Imported {nodes_imported} nodes (failed: {nodes_failed})")
-        
+            
         # Import edges in batches
         print(f"\n🔄 Importing edges in batches of {BATCH_SIZE}...")
         edges_imported = 0
@@ -191,8 +195,11 @@ def import_data_to_arangodb(db_connection):
             transformed_batch = []
             for edge in batch:
                 # Extract entity_id from URIs (last component after /)
-                source_key = edge['source_uri'].split('/')[-1].split('?')[0]  # Handle query params
-                target_key = edge['target_uri'].split('/')[-1].split('?')[0]
+                source_key = edge['source_uri'].split('/')[-1].split('?t=')[-1]  # Handle query params
+                target_key = edge['target_uri'].split('/')[-1].split('?t=')[-1]
+
+                # Fix ENST identifiers if they are in the format Summary?t=ENST00000XXXXX
+    
                 
                 # Create edge document with _from/_to and ALL original properties
                 edge_doc = {
@@ -225,6 +232,83 @@ def import_data_to_arangodb(db_connection):
         print(f"✗ Unexpected error during import: {e}")
         traceback.print_exc()
 
+
+def _extract_enst_id(uri):
+    """Return ENST identifier found after the Summary query parameter in a URI."""
+    if not uri:
+        return None
+
+    marker = "Summary?t="
+    candidate = uri.split(marker, 1)[-1] if marker in uri else uri
+    candidate = candidate.split('&', 1)[0]
+    candidate = candidate.split('#', 1)[0]
+    candidate = candidate.split('/', 1)[0]
+
+    match = re.search(r"ENST\d+", candidate)
+    return match.group(0) if match else None
+
+def fix_summary_edges(db_connection):
+    """Replace placeholder nodes/Summary references in edges with the actual ENST ids."""
+    if db_connection is None:
+        print("✗ No database connection available for ENST edge fix")
+        return
+
+    print("\n🔧 Fixing edges referencing nodes/Summary ...")
+    query = """
+    FOR edge IN edges
+        FILTER edge._from == "nodes/Summary" OR edge._to == "nodes/Summary"
+        RETURN {
+            _key: edge._key,
+            _from: edge._from,
+            _to: edge._to,
+            source_uri: edge.source_uri,
+            target_uri: edge.target_uri
+        }
+    """
+
+    edges_to_fix = list(db_connection.aql.execute(query))
+    print(f"Found {len(edges_to_fix)} edges with placeholder references to nodes/Summary")
+    if not edges_to_fix:
+        print("✓ No edges with placeholder references detected")
+        return
+
+    edges_collection = db_connection.collection('edges')
+    updated = 0
+    skipped = 0
+    from tqdm import tqdm
+    for edge in tqdm(edges_to_fix, desc="Fixing edges"):
+        update_doc = {'_key': edge['_key']}
+        missing_identifier = False
+
+        if edge['_from'] == 'nodes/Summary':
+            enst_id = _extract_enst_id(edge.get('source_uri')) or _extract_enst_id(edge.get('target_uri'))
+            if enst_id:
+                update_doc['_from'] = f"nodes/{enst_id}"
+            else:
+                missing_identifier = True
+
+        if edge['_to'] == 'nodes/Summary':
+            enst_id = _extract_enst_id(edge.get('target_uri')) or _extract_enst_id(edge.get('source_uri'))
+            if enst_id:
+                update_doc['_to'] = f"nodes/{enst_id}"
+            else:
+                missing_identifier = True
+
+        if len(update_doc) == 1 or missing_identifier:
+            skipped += 1
+            if missing_identifier:
+                print(f"  ⚠ Skipped edge {edge['_key']} - unable to determine ENST identifier")
+            continue
+
+        try:
+            edges_collection.update(update_doc)
+            updated += 1
+        except Exception as e:
+            skipped += 1
+            print(f"  ⚠ Failed to update edge {edge['_key']}: {e}")
+
+    print(f"✓ Fixed {updated}/{len(edges_to_fix)} edges (skipped: {skipped})")
+
 from arangodb_utils import *
 
 #%%
@@ -244,18 +328,78 @@ if __name__ == "__main__":
         
         # 2. Importazione Dati
         import_data_to_arangodb(db)
+
+        # 2b. Correggi gli edge ENST con riferimenti a nodes/Summary
+        # fix_summary_edges(db)
         
         # 3. Verifica finale
         print("\nFinal verification:")
-        check_collections_data(db)
+        get_collections_data(db)
 
-        # 4. Visualizza il grafo
-        G = visualize_random_graph(db)
+        # 4. Visualizza grafo esempio di query
+        query = 'PR_Q9H609'
+        subgraph = get_node_centric_graph(db, node_key=query)
+        # subgraph = get_node_centric_graph(db, filters={'label': 'TP53'}, edge_limit=100)
+        plot_subgraph(subgraph, layout='kamada_kawai', highlight_center=True, save_path=f'{query}_subgraph.png')
     else:
         print("✗ Failed to connect to ArangoDB. Please check if ArangoDB is running.")
-        
+
+#%%
+if __name__ == "__main__":
+    import arangodb_utils
+    from importlib import reload
+    reload(arangodb_utils)
+    from arangodb_utils import get_node_centric_graph
+    node = get_nodes_by_pattern(db, pattern="ENST00000362302", collection_name='nodes', property_name='entity_id')
+    print(node)
+#%%
+
 # %%
 
+#%%
+# Fix ENST edges in the database (example for ENST00000362302)
+"""
+in nodes:
+_id:nodes/ENST00000541341
+_rev:_kneFK2K--F
+_key:ENST00000541341
+{
+  "uri": "https://uswest.ensembl.org/Homo_sapiens/Transcript/Summary?t=ENST00000541341",
+  "namespace": "uswest.ensembl.org",
+  "entity_id": "ENST00000541341",
+  "class_code": "ENST",
+  "label": "CHFR-219",
+  "bioentity_type": "rna",
+  "description": "Transcript CHFR-219 is classified as type 'retained_intron'.",
+  "synonym": "",
+  "source": "Ensembl Transcript",
+  "source_type": "Database",
+  "integer_id": 13
+}
+
+in edges:
+_id:edges/edge_4
+_rev:_kneF6ZS--B
+_key:edge_4
+_from:nodes/Summary
+_to:nodes/SO_0000110
+{
+  "source_uri": "https://uswest.ensembl.org/Homo_sapiens/Transcript/Summary?t=ENST00000541341",
+  "target_uri": "http://purl.obolibrary.org/obo/SO_0000110",
+  "predicate_uri": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+  "predicate_label": "type",
+  "predicate_class_code": "RDF",
+  "predicate_bioentity_type": "go",
+  "predicate_source": "Resource Description Framework"
+}
+
+
+questo _from:nodes/Summary va corretto nella collezione "edges" 
+in ogni caso in cui _from o _to sia "nodes/Summary", questo va corretto, Summary va sostituito col valore reale di "ENST00000XXXXX"
+il valore reale fi enst si trova nel relativo source o target_uri dopo "Summary?t="
+
+scrivi un funzoine, essenziale funzionale che opera questa correzione nella collezione "edges"
+"""
 
 # %%
 # 4. Visualizza il grafo

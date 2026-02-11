@@ -340,36 +340,131 @@ sample_profile["mirna"]
 
 
 #%%
-############ OTHER DEPrecxated ##############
+############ Transomic networs ##############
 
-def query_gene_expression_by_pathway(db_connection, 
-                                     pathway_genes, 
-                                     tumor_samples):
-    aql_query = """
-    FOR gene IN genes
-      FILTER gene.entrez_id IN @pathway_genes
-      FOR expr IN gene_expression_TCGA_BRCA
-        FILTER expr.gene_ref == CONCAT("genes/", gene._key)
-        FILTER expr.sample_id IN @tumor_samples
-        RETURN {
-          gene: gene.hgnc_symbol,
-          sample: expr.sample_id,
-          expression: expr.tpm
-        }
+# from query_utils import *
+
+
+#%% Quick-start cell for notebooks (edit variables then run)
+
+# {"_key": "TCGA-E9-A1N8-01A", 
+# {"_key": "TCGA-E9-A1N8-11A", 
+{
+  "01": "Primary Solid Tumor",
+  "02": "Recurrent Solid Tumor",
+  "03": "Primary Blood Derived Cancer – Peripheral Blood",
+  "10": "Blood Derived Normal",
+  "11": "Solid Tissue Normal",
+  "06": "Metastatic",
+  "07": "Additional New Primary"
+}
+
+#%%
+#%% Notebook-friendly helper
+import argparse
+import json
+import os
+import sys
+from typing import List, Optional, Tuple
+import query_utils
+from importlib import reload    
+reload(query_utils)
+from arangodb_utils import setup_arangodb_connection
+from query_utils import (
+    OMIC_CONFIG,
+    build_transomic_property_graph,
+    list_samples_with_complete_omics,
+)
+
+def build_transomic_network_for_sample(
+    db_name: str,
+    cohort: str,
+    sample_id: str,
+    omic_types: Optional[List[str]] = None,
+    value_abs_threshold: Optional[float] = None,
+    top_n: Optional[int] = None,
+    predicate_filter: Optional[List[str]] = None,
+    edge_limit: Optional[int] = 5000,
+    output_path: Optional[str] = None,
+) -> Tuple[dict, str]:
     """
-    bind_vars = {
-        "pathway_genes": pathway_genes,
-        "tumor_samples": tumor_samples
-    }
-    result = db_connection.aql.execute(aql_query, bind_vars=bind_vars)
-    return list(result)
+    Build and optionally persist a transomic property-graph for a single sample.
 
-# example usage
-pathway_genes = ["7157", "7422", "1956"]  # Example Entrez IDs for TP53, EGFR, AKT1
-tumor_samples = ["TCGA-A1-A0SB-01A", "TCGA-BH-A0B3-01A"]  # Example sample IDs
-expression_data = query_gene_expression_by_pathway(db_connection, pathway_genes, tumor_samples)
-for record in expression_data:
-    print(record)
+    Designed for notebook (#%%) execution: returns the graph object and the path used.
+    The caller must provide a specific sample_id; no cohort-wide batching is done here.
+    """
+    db = setup_arangodb_connection(db_name)
+    if db is None:
+        raise RuntimeError("Failed to connect to ArangoDB")
+
+    omic_types = omic_types or list(OMIC_CONFIG.keys())
+
+    graph = build_transomic_property_graph(
+        db_connection=db,
+        cohort=cohort,
+        sample_id=sample_id,
+        omic_types=omic_types,
+        value_abs_threshold=value_abs_threshold,
+        top_n=top_n,
+        predicate_filter=predicate_filter,
+        include_edges=True,
+        edge_limit=edge_limit
+    )
+
+    out_path = output_path
+    if out_path is None:
+        safe_sample = sample_id.replace("/", "-")
+        filename = f"transomic_graph_{safe_sample}.json"
+        filename = f"transomic_graph_{safe_sample}_edges{str(edge_limit)}.json" if edge_limit else filename
+        out_path = os.path.join("..", "transomic-networks", filename)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(graph, f, indent=2)
+
+    return graph, out_path
+
+#%% Quick-start cell for notebooks (edit variables then run)
+
+# {"_key": "TCGA-E9-A1N8-01A", 
+# {"_key": "TCGA-E9-A1N8-11A", 
+{
+  "01": "Primary Solid Tumor",
+  "02": "Recurrent Solid Tumor",
+  "03": "Primary Blood Derived Cancer – Peripheral Blood",
+  "10": "Blood Derived Normal",
+  "11": "Solid Tissue Normal",
+  "06": "Metastatic",
+  "07": "Additional New Primary"
+}
+
+
+# Uncomment and execute in a notebook/VS Code interactive window
+DB_NAME = "PKT_test10000"
+COHORT = "TCGA-BRCA"
+Case = "TCGA-BH-A1F2" #TCGA-GM-A2DD
+Case = "TCGA-BH-A18U" # has metilathiion data
+Sample = "01"
+SAMPLE_ID =f"{Case}-{Sample}A"  # required: single sample only
+
+graph_obj, saved_path = build_transomic_network_for_sample(
+    db_name=DB_NAME,
+    cohort=COHORT,
+    sample_id=SAMPLE_ID,
+    omic_types=list(OMIC_CONFIG.keys()),
+    value_abs_threshold=None,
+    top_n=None,
+    predicate_filter=None,
+    edge_limit=10000
+)
+print(f"Graph saved to {saved_path}")
+
+"""
+Quanti e quali nodi intermedi prende:
+- Non aggiunge nodi intermedi alla lista `nodes`; crea solo i nodi delle feature omiche del campione.
+- Recupera nodi adiacenti solo come parte di `edges`: per ogni arco restituisce il nodo vicino nel campo `neighbor`, limitato al 1-hop sui `kg_node_key` trovati e al `limit` (default 5000) di `get_edges_for_node_keys`.
+"""
+
 
 #%%
 

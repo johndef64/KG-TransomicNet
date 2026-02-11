@@ -253,6 +253,38 @@ def get_edges_by_predicate(db_connection, predicate_label: str, limit: int = 100
     bind_vars = {"predicateLabel": predicate_label, "limit": limit}
     return list(db_connection.aql.execute(aql, bind_vars=bind_vars))
 
+def get_edge_by_head_or_tail(db_connection,
+                             query: str,
+                             limit: int = 100,
+                             use_regex: bool = True) -> List[Dict]:
+    """
+    Find edges where _from or _to matches a single query value.
+
+    Args:
+        query: pattern to match against both _from and _to.
+        limit: max edges to return.
+        use_regex: when True, apply REGEX_TEST on _from/_to; otherwise exact equality.
+    """
+    if not query:
+        return []
+
+    bind_vars = {"limit": limit, "query": query}
+
+    if use_regex:
+        filter_clause = "REGEX_TEST(e._from, @query, true) OR REGEX_TEST(e._to, @query, true)"
+    else:
+        filter_clause = "e._from == @query OR e._to == @query"
+
+    aql = f"""
+    FOR e IN edges
+        FILTER {filter_clause}
+        LIMIT @limit
+        RETURN e
+    """
+
+    return list(db_connection.aql.execute(aql, bind_vars=bind_vars))
+
+
 def get_node_neighbors(db_connection, node_key: str, direction: str = "any", limit: int = 100) -> List[Dict]:
     """
     Get neighboring nodes connected to a given node.
@@ -416,6 +448,7 @@ Unique values for 'class_code' in 'nodes':
   [...]
 """
 
+#%%
 if __name__ == "__main__":
     from arangodb_utils import *
     db_connection = setup_arangodb_connection("PKT_test10000")
@@ -423,9 +456,23 @@ if __name__ == "__main__":
     node_class_code = get_key_value_counts(db_connection, "nodes", "class_code")
 
     edge_class_code = get_key_value_counts(db_connection, "edges", "predicate_class_code")
-#%%
-edge_class_code
 
+#%%
+if __name__ == "__main__":
+    # query ENST00000362302  on edges
+    edges = get_edges_by_predicate(db_connection, "has gene product", limit=5)
+    for e in edges:
+        print(f"{e['_from']} --[{e['predicate_label']}]-> {e['_to']}")
+#%%
+if __name__ == "__main__":
+    # query ENST00000362302  on edges
+    query = ".*R-HSA-109582"
+    # query = ".*ENST00000362302" 
+    # query = ".*ENST.*" 
+    edges = get_edge_by_head_or_tail(db_connection, query=query, limit=5, use_regex=True)
+    for e in edges:
+        print(f"{e['_from']} --[{e['predicate_label']}]-> {e['_to']}")
+#%%
 
 #%%
 # =============================================================================
@@ -510,9 +557,10 @@ def test_query(db_connection, query_aql):
     for doc in result:
         return doc
 
-info = get_gene_info(db_connection, hgnc_symbol="MIRLET7*")
-for i in info:
-    print(i["hgnc_symbol"])
+if __name__ == "__main__":
+    info = get_gene_info(db_connection, hgnc_symbol="MIRLET7*")
+    for i in info:
+        print(i["hgnc_symbol"])
 #%%
 # =============================================================================
 # GENE EXPRESSION QUERIES
@@ -1204,5 +1252,397 @@ def get_sample_list_intersection(multiomics_data):
 
 # =============================================================================
 # TRANSOMIC NETWORKS QUERIES
-# la costruizione delle reti trasomiche è lo scopo finale queste funzioni servono a recuperare i dati necessari per costruire le reti trasomiche e fare analisi integrative, e rilvare pattern causalità tra i diversi livelli di dati omici e il fenotipo.
+# la costruzione delle reti trasomiche è lo scopo finale queste funzioni servono a recuperare i dati necessari per costruire le reti trasomiche e fare analisi integrative, e rilvare pattern causalità tra i diversi livelli di dati omici e il fenotipo.
+
+# le collection omiche [GENE_EXPRESSION, CNV, METHYLATION, MIRNA, PROTEIN] contengono i dati omici organizzati in vettori ordinati per campione e con un indice che mappa ogni posizione del vettore a un gene o entità biologica specifica. 
+# le collection [SAMPLES, CASES] contengono informazioni sui campioni e i casi clinici
+
+# la collection [GENES] contiene informazioni sui geni e i loro mapping a diversi identificatori, e funge da pivot per collegare i dati omici ai nodi del grafo della conoscenza.
+
+# le collection [nodes, edges] contengono i nodi e le relazioni del grafo della conoscenza, con i nodi che rappresentano entità biologiche e le relazioni che rappresentano interazioni o associazioni tra di esse.
+
+# Lo scopo è costruire una rete transomica multi livello per campione, integrando i dati omici con il grafo della conoscenza per identificare pattern di alterazione e potenziali meccanismi causali che collegano le alterazioni molecolari al fenotipo clinico.
+# il fomato piu appropriato per la rete è il property graph in JSON, per poter codificare i diversi livelli di dati omici come proprietà dei nodi e delle relazioni e i loro valori numerici, e per poter facilmente serializzare e deserializzare la rete per l'analisi e la visualizzazione.
+
+# il grafo finale è multiomico e multilivello, con nodi che rappresentano geni, proteine, miRNA, siti di metilazione, e relazioni che rappresentano interazioni biologiche, regolazioni, e associazioni cliniche.
+# si puo usare il [SAMPLES "specimen_type": "Solid Tissue Normal"] come riferimento per identificare alterazioni specifiche del tumore [SAMPLES "specimen_type": "Primary Tumor"] rispetto al tessuto normale, e costruire reti trasomiche che evidenziano le differenze tra i campioni tumorali e normali.
+
+# di sotto le funzioni per recuperare i dati necessari per costruire le reti trasomiche, come ad esempio ottenere i profili omici completi per un campione, identificare i campioni con dati disponibili in tutti i livelli omici, e recuperare le interazioni biologiche rilevanti dal grafo della conoscenza.
+# (il grafo prodetto e salavto nel fomato approrpitao passerà ad un altro script per l'analisi e la visualizzazione delle reti trasomiche e l'identificazione di pattern di alterazione e potenziali meccanismi causali.)
 # =============================================================================
+
+
+# Default identifier priorities per omic type when stitching vectors to entities
+DEFAULT_ID_PRIORITY = {
+    "gene_expression": ["entrez_id", "hgnc_symbol", "gene_id_base", "gene_id_ensembl"],
+    "cnv": ["entrez_id", "gene_id_base", "gene_id_ensembl"],
+    "methylation": ["probe_id", "cg_id"],
+    "mirna": ["mirna_id", "mirbase_id", "mirna_symbol"],
+    "protein": ["gene_symbol", "entrez_id", "peptide_target"]
+}
+
+
+def _fetch_index_and_vector(db_connection, cohort: str, sample_id: str, omic_type: str) -> Dict[str, Any]:
+    """Internal helper to load index doc and vector doc for an omic type."""
+    if omic_type not in OMIC_CONFIG:
+        return {}
+
+    config = OMIC_CONFIG[omic_type]
+    index_key = f"{config['index_key_prefix']}_{cohort}"
+
+    aql = f"""
+    LET idx = FIRST(
+        FOR doc IN {config['collection']}
+            FILTER doc.data_type == @indexType
+            FILTER doc._key == @indexKey
+            RETURN doc
+    )
+    LET vec = FIRST(
+        FOR doc IN {config['collection']}
+            FILTER doc.data_type == @vectorType
+            FILTER doc._key == @sampleId
+            FILTER doc.cohort == @cohort
+            RETURN doc
+    )
+    RETURN {{index: idx, vector: vec}}
+    """
+
+    bind_vars = {
+        "indexType": config["index_data_type"],
+        "vectorType": config["vector_data_type"],
+        "indexKey": index_key,
+        "sampleId": sample_id,
+        "cohort": cohort
+    }
+
+    result = list(db_connection.aql.execute(aql, bind_vars=bind_vars))
+    return result[0] if result else {}
+
+
+def _select_identifier(mapping: Dict[str, Any], priority: List[str]) -> Optional[Any]:
+    """Pick the first non-null identifier in priority order."""
+    for key in priority:
+        if mapping.get(key) not in [None, ""]:
+            return mapping[key]
+    return None
+
+
+def get_sample_feature_table(db_connection,
+                             cohort: str,
+                             sample_id: str,
+                             omic_type: str,
+                             value_field: Optional[str] = None,
+                             id_priority: Optional[List[str]] = None,
+                             value_abs_threshold: Optional[float] = None,
+                             top_n: Optional[int] = None) -> Dict[str, Any]:
+    """
+    Materialize a sample vector into a feature table with identifiers and values.
+
+    Args:
+        cohort: Cohort name (e.g., "TCGA-BRCA").
+        sample_id: Sample key (_key in vector docs).
+        omic_type: One of OMIC_CONFIG keys.
+        value_field: Override default value field; if None, the first configured one is used.
+        id_priority: Ordered list of mapping keys to use as identifier.
+        value_abs_threshold: Keep only features with |value| >= threshold.
+        top_n: Keep only the first N features after filtering (order follows mapping position).
+
+    Returns:
+        Dict with omic_type, value_field, and a list of feature dicts.
+    """
+    id_priority = id_priority or DEFAULT_ID_PRIORITY.get(omic_type, [])
+    data = _fetch_index_and_vector(db_connection, cohort, sample_id, omic_type)
+    idx_doc, vec_doc = data.get("index"), data.get("vector")
+
+    if not idx_doc or not vec_doc:
+        return {"omic_type": omic_type, "value_field": value_field, "features": []}
+
+    mapping_field = OMIC_CONFIG[omic_type]["mapping_field"]
+    mappings = idx_doc.get(mapping_field, []) or []
+    chosen_value_field = value_field or OMIC_CONFIG[omic_type]["value_fields"][0]
+    values = vec_doc.get(chosen_value_field, []) or []
+
+    features = []
+    for mapping in mappings:
+        pos = mapping.get("position")
+        if pos is None or pos >= len(values):
+            continue
+        val = values[pos]
+        if value_abs_threshold is not None and val is not None:
+            if abs(val) < value_abs_threshold:
+                continue
+        identifier = _select_identifier(mapping, id_priority)
+        features.append({
+            "position": pos,
+            "identifier": identifier,
+            "value": val,
+            "mapping": mapping
+        })
+
+    if top_n is not None:
+        features = features[:top_n]
+
+    return {
+        "omic_type": omic_type,
+        "value_field": chosen_value_field,
+        "features": features,
+        "sample_id": sample_id,
+        "cohort": cohort
+    }
+
+
+def list_samples_with_complete_omics(db_connection,
+                                     cohort: str,
+                                     omic_types: Optional[List[str]] = None,
+                                     specimen_type: Optional[str] = None,
+                                     limit: Optional[int] = None) -> List[str]:
+    """
+    Return sample IDs that have vectors for all requested omic types.
+
+    Args:
+        cohort: Cohort name.
+        omic_types: Subset of OMIC_CONFIG keys; if None all are required.
+        specimen_type: Optional filter using SAMPLES.specimen_type (e.g., "Primary Tumor").
+        limit: Optional cap on returned sample count.
+    """
+    omic_types = omic_types or list(OMIC_CONFIG.keys())
+    sample_sets = []
+
+    # Restrict to eligible samples if specimen_type is provided
+    eligible_samples = None
+    if specimen_type:
+        aql = """
+        FOR s IN SAMPLES
+            FILTER s.cohort == @cohort
+            FILTER s.specimen_type == @specimenType
+            RETURN s._key
+        """
+        eligible_samples = set(db_connection.aql.execute(aql, bind_vars={"cohort": cohort, "specimenType": specimen_type}))
+
+    for omic in omic_types:
+        if omic not in OMIC_CONFIG:
+            continue
+        config = OMIC_CONFIG[omic]
+        aql = f"""
+        FOR doc IN {config['collection']}
+            FILTER doc.data_type == @vectorType
+            FILTER doc.cohort == @cohort
+            RETURN doc._key
+        """
+        keys = set(db_connection.aql.execute(aql, bind_vars={"vectorType": config["vector_data_type"], "cohort": cohort}))
+        if eligible_samples is not None:
+            keys &= eligible_samples
+        sample_sets.append(keys)
+
+    if not sample_sets:
+        return []
+
+    intersection = set.intersection(*sample_sets) if sample_sets else set()
+    result = sorted(intersection)
+    if limit is not None:
+        result = result[:limit]
+    return result
+
+
+def resolve_nodes_by_class_and_id(db_connection,
+                                  class_code: str,
+                                  entity_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+    """
+    Map entity_ids to KG nodes (_key, uri) for a given class_code (e.g., EntrezID).
+    Returns dict keyed by entity_id.
+    """
+    if not entity_ids:
+        return {}
+
+    aql = """
+    FOR n IN nodes
+        FILTER n.class_code == @classCode
+        FILTER n.entity_id IN @ids
+        RETURN { id: n.entity_id, key: n._key, uri: n.uri, label: n.label }
+    """
+    bind_vars = {"classCode": class_code, "ids": entity_ids}
+    results = list(db_connection.aql.execute(aql, bind_vars=bind_vars))
+    return {r["id"]: r for r in results}
+
+
+def get_edges_for_node_keys(db_connection,
+                            node_keys: List[str],
+                            direction: str = "any",
+                            predicate_filter: Optional[List[str]] = None,
+                            limit: int = 5000) -> List[Dict[str, Any]]:
+    """
+    Retrieve edges touching any of the provided node keys.
+    direction: any|outbound|inbound controls edge orientation filter.
+    predicate_filter: optional list of predicate_label values to keep.
+    """
+    if not node_keys:
+        return []
+
+    dir_clause = {
+        "outbound": "OUTBOUND",
+        "inbound": "INBOUND",
+        "any": "ANY"
+    }.get(direction, "ANY")
+
+    predicate_clause = """
+        FILTER @predicates == null OR e.predicate_label IN @predicates
+    """
+
+    aql = f"""
+    FOR nk IN @nodeKeys
+        FOR v, e IN 1..1 {dir_clause} CONCAT("nodes/", nk) edges
+            {predicate_clause}
+            LIMIT @limit
+            RETURN {{
+                edge: e,
+                neighbor: v
+            }}
+    """
+
+    bind_vars = {
+        "nodeKeys": node_keys,
+        "predicates": predicate_filter,
+        "limit": limit
+    }
+    return list(db_connection.aql.execute(aql, bind_vars=bind_vars))
+
+
+def build_transomic_property_graph(db_connection,
+                                   cohort: str,
+                                   sample_id: str,
+                                   omic_types: Optional[List[str]] = None,
+                                   value_field_override: Optional[Dict[str, str]] = None,
+                                   value_abs_threshold: Optional[float] = None,
+                                   top_n: Optional[int] = None,
+                                   include_edges: bool = True,
+                                   predicate_filter: Optional[List[str]] = None,
+                                   edge_limit: int = 5000) -> Dict[str, Any]:
+    """
+    Build a per-sample property graph JSON combining omic vectors and KG edges.
+
+    - Nodes: one per feature with omic_type, identifier, value, optional kg info.
+    - Edges: KG edges among mapped nodes (if include_edges=True).
+    """
+    omic_types = omic_types or list(OMIC_CONFIG.keys())
+    value_field_override = value_field_override or {}
+
+    feature_tables = []
+    for omic in omic_types:
+        table = get_sample_feature_table(
+            db_connection,
+            cohort=cohort,
+            sample_id=sample_id,
+            omic_type=omic,
+            value_field=value_field_override.get(omic),
+            id_priority=DEFAULT_ID_PRIORITY.get(omic),
+            value_abs_threshold=value_abs_threshold,
+            top_n=top_n
+        )
+        if table.get("features"):
+            feature_tables.append(table)
+
+    nodes = []
+    kg_node_keys = []
+
+    lookup_reqs = {}
+    staged = []
+    for table in feature_tables:
+        for feat in table["features"]:
+            mapping = feat.get("mapping") or {}
+            class_code = mapping.get("class_code") or ("EntrezID" if "entrez_id" in mapping else None)
+            entity_id = mapping.get("entrez_id") or mapping.get("probe_id") or mapping.get("mirna_id")
+
+            if class_code and entity_id:
+                lookup_reqs.setdefault(class_code, set()).add(entity_id)
+
+            staged.append((table, feat, class_code, entity_id))
+    """
+    problemi di mapping sul kg, vesione attual emappa tutto sui nodi gene, ma le omiche vanno mappate sui nodi corrispondenti, ad esempio i nodi metilazione sui nodi gene va bene, i nodi mirna sui nodi gene va bene (come approssimazione).
+    La gene expression sui nodi gene sebbene si riferica a i trasitti ma il valore non è prodtto su assembli trascrittomivo ma genomico, peranto rappresenta quanto quel gene è espresso. non sappiamo quanto è espresso ongi singolo possibile trascitto di quel gene... 
+    i nodi protein vanno mappato sui nodi proteina del grafo, .
+
+    Altrimenti si perde molta specificità e si rischia di mappare tutto su pochi nodi gene molto connessi, perdendo la capacità di distinguere le diverse entità biologiche rappresentate dalle feature omiche.
+
+    
+
+    nodo gene:
+      "kg_node_key": "7158",
+      "kg_uri": "http://www.ncbi.nlm.nih.gov/gene/7158",
+      "kg_label": "TP53BP1 (human)"
+
+    nodo proteina usa PR ontology che è derivata da uniprotid:
+        "_key": "PR_Q6JQN1",
+        "uri": "http://purl.obolibrary.org/obo/PR_Q6JQN1",
+        "namespace": "purl.obolibrary.org",
+        "entity_id": "PR_Q6JQN1",
+        "class_code": "PR",
+    """
+
+
+    kg_hits = {}
+    for cc, ids in lookup_reqs.items():
+        resolved = resolve_nodes_by_class_and_id(db_connection, class_code=cc, entity_ids=list(ids))
+        for eid, hit in resolved.items():
+            kg_hits[(cc, eid)] = hit
+
+    for table, feat, class_code, entity_id in staged:
+        node_entry = {
+            "id": feat.get("identifier"),
+            "omic_type": table["omic_type"],
+            "value_field": table["value_field"],
+            "value": feat.get("value"),
+            "position": feat.get("position"),
+            "mapping": feat.get("mapping")
+        }
+
+        hit = kg_hits.get((class_code, entity_id))
+        if hit:
+            node_entry["kg_node_key"] = hit["key"]
+            node_entry["kg_uri"] = hit.get("uri")
+            node_entry["kg_label"] = hit.get("label")
+            kg_node_keys.append(hit["key"])
+
+        nodes.append(node_entry)
+
+    edges = []
+    if include_edges and kg_node_keys:
+        unique_keys = sorted(set(kg_node_keys))
+        edges = get_edges_for_node_keys(
+            db_connection,
+            node_keys=unique_keys,
+            direction="any",
+            predicate_filter=predicate_filter,
+            limit=edge_limit
+        )
+
+    return {
+        "metadata": {
+            "cohort": cohort,
+            "sample_id": sample_id,
+            "omic_types": omic_types,
+            "predicate_filter": predicate_filter,
+            "value_abs_threshold": value_abs_threshold,
+            "top_n": top_n
+        },
+        "nodes": nodes,
+        "edges": edges
+    }
+
+
+"""
+Ecco come opera `build_transomic_property_graph` e quali nodi “intermedi” coinvolge: vedi il codice in query_utils.py.
+
+- Scopo: costruire un grafo property per un singolo campione (`sample_id`, `cohort`), aggregando feature omiche e (opzionalmente) gli archi del KG che toccano i nodi mappati.
+- Input chiave: `omic_types` (default tutte le omiche note), `value_field_override` per scegliere il campo valori per omica, `value_abs_threshold` per filtrare per ampiezza |valore|, `top_n` per limitare le feature per omica, `predicate_filter` per filtrare gli archi del KG, `include_edges` (default True).
+- Passi:
+  - Per ogni omica richiesta crea una feature table con `get_sample_feature_table`, che legge index+vector del campione, applica filtri su valore/ordine e produce feature con `identifier`, `value`, `position`, `mapping`.
+  - Raccoglie le richieste di risoluzione KG in batch per ciascuna combinazione `class_code`/`entity_id` trovata nei mapping (es. EntrezID o probe_id), poi risolve una sola volta per classe con `resolve_nodes_by_class_and_id`. Se trova match, aggiunge a ogni feature i metadati `kg_node_key`, `kg_uri`, `kg_label`.
+  - Costruisce `nodes`: uno per ogni feature omica filtrata (quindi solo i nodi derivati dalle feature del campione). I nodi del KG non vengono aggiunti come nodi separati, salvo i metadati sopra.
+  - Se `include_edges` è True e ci sono `kg_node_key`, chiama `get_edges_for_node_keys` per estrarre gli archi 1-hop (ANY direction) che toccano quei nodi KG; opzionalmente filtra per `predicate_filter`. Ritorna ogni arco con anche il `neighbor` (il nodo adiacente completo) nel payload.
+- Output: dict con `metadata` (cohort, sample_id, filtri), `nodes` (feature omiche annotate, eventualmente con info KG), `edges` (archi KG e relativo vicino).
+
+Quanti e quali nodi intermedi prende:
+- Non aggiunge nodi intermedi alla lista `nodes`; crea solo i nodi delle feature omiche del campione.
+- Recupera nodi adiacenti solo come parte di `edges`: per ogni arco restituisce il nodo vicino nel campo `neighbor`, limitato al 1-hop sui `kg_node_key` trovati e al `limit` (default 5000) di `get_edges_for_node_keys`.
+- In pratica gli unici nodi “intermedi” sono i vicini 1-hop riportati dentro ciascun elemento di `edges`. Non li materializza nella lista `nodes` a meno che tu non li aggiunga tu stesso.
+"""
