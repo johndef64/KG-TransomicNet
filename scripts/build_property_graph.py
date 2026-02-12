@@ -81,7 +81,6 @@ def create_metadata_lookup(nodelabels_df):
     print(f"Created metadata lookup with {len(metadata_lookup)} entries")
     return metadata_lookup
 
-
 def get_entity_metadata(uri, metadata_lookup):
     """
     Get metadata for an entity from the metadata lookup.
@@ -150,7 +149,6 @@ if os.path.exists(metadata_lookup_path):
         with zipf.open('metadata_lookup.json') as f:
             metadata_lookup = json.load(f)
     print(f"Loaded existing metadata lookup from {metadata_lookup_path}")
-    
 else:
     print(f"Loading NodeLabels from {node_label_file}...")
     NodeLabels = pd.read_csv(node_label_file)

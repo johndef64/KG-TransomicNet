@@ -42,6 +42,10 @@ Multi-omics measurements are represented as properties of knowledge graph nodes:
 - miRNA expression → miRNA nodes
 - Proteomics → Protein nodes
 
+Detailed data structure are described in the [Database Structure Documentation](docs/readme_db_structure.md).
+<!-- add a link to docs/readme_db_structure.md -->
+
+
 ## Key Scripts
 
 1. `scripts\build_property_graph.py`: Converts PKT TSV tables to ArangoDB-compatible JSON format

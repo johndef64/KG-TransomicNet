@@ -42,6 +42,9 @@ def setup_arangodb_connection(db_name = db_name):
         print(f"✗ Error setting up ArangoDB connection. Is ArangoDB running on {arangodb_hosts}? Error: {e}")
         return None
 
+if __name__ == "__main__":
+    db = setup_arangodb_connection()
+
 # manage arando db databases
 def list_databases():
     """List all databases in ArangoDB"""
@@ -400,24 +403,110 @@ def list_dumps(dumps_dir="./dumps/"):
 
 
 # --- FUNZIONI AGGIUNTIVE ---
-def check_collections_data(db_connection):
-    """Check and print the number of documents in each collection"""
-    if db_connection is None: return
+def get_collections_data(db_connection, pattern=None, show_summary = True):
+    """Check and print the number of documents in each collection
+    
+    Args:
+        db_connection: ArangoDB database connection
+        pattern: Optional regex pattern to filter collection names (e.g. "^node" or "edge.*")
+    
+    Returns:
+        List of dicts with collection info: [{"name": str, "count": int, "type": str}, ...]
+    """
+    import re
+    if db_connection is None: return []
 
     try:
-        for collection_name in ['nodes', 'edges']:
-            if db_connection.has_collection(collection_name):
-                collection = db_connection.collection(collection_name)
-                count = collection.count()
-                print(f"Collection '{collection_name}' has {count} documents.")
-            else:
-                print(f"Collection '{collection_name}' does not exist.")
+        collections = db_connection.collections()
+        
+        print(f"\n📊 Collections in database:")
+        total_docs = 0
+        result_list = []
+        
+        for coll_info in collections:
+            coll_name = coll_info['name']
+            
+            # Skip system collections
+            if coll_name.startswith('_'):
+                continue
+            
+            # Apply regex filter if provided
+            if pattern:
+                if not re.search(pattern, coll_name, re.IGNORECASE):
+                    continue
+            
+            collection = db_connection.collection(coll_name)
+            count = collection.count()
+            coll_type = "edge" if coll_info['type'] == 3 else "document"
+            
+            print(f"  • {coll_name}: {count} documents ({coll_type})")
+            total_docs += count
+            result_list.append({"name": coll_name, "count": count, "type": coll_type})
+        
+        if show_summary:
+            print(f"\n  Total: {len(result_list)} collections, {total_docs} documents")
+            if pattern:
+                print(f"  (filtered by pattern: '{pattern}')")
+
+        collection_names = [coll['name'] for coll in result_list]
+        
+        return collection_names
+            
     except Exception as e:
         print(f"✗ Error checking collections data: {e}")
+        return []
 
+def delete_collection(db_connection, collection_name, confirm=True):
+    """Delete a collection completely from the database
+    
+    Args:
+        db_connection: ArangoDB database connection
+        collection_name: Name of the collection to delete
+        confirm: If True, ask for confirmation before deleting
+    
+    Returns:
+        True if deleted successfully, False otherwise
+    """
+    if db_connection is None:
+        print("✗ No database connection available")
+        return False
+    
+    try:
+        if not db_connection.has_collection(collection_name):
+            print(f"⚠ Collection '{collection_name}' does not exist.")
+            return False
+        
+        # Get collection info before deletion
+        collection = db_connection.collection(collection_name)
+        doc_count = collection.count()
+        
+        if confirm:
+            print(f"\n⚠ WARNING: You are about to delete collection '{collection_name}'")
+            print(f"  This collection contains {doc_count} documents.")
+            response = input("  Type 'yes' to confirm deletion: ")
+            if response.lower() != 'yes':
+                print("  Deletion cancelled.")
+                return False
+        
+        # Delete the collection
+        db_connection.delete_collection(collection_name)
+        print(f"✓ Collection '{collection_name}' deleted successfully ({doc_count} documents removed)")
+        return True
+        
+    except Exception as e:
+        print(f"✗ Error deleting collection '{collection_name}': {e}")
+        traceback.print_exc()
+        return False
 
 # funzioni per caricare multi omics datasets
-# setup_arangodb_connection()
+if False:
+    db_connection = setup_arangodb_connection()
+    collections = get_collections_data(db_connection)
+    collections_to_delete = [coll for coll in collections if coll.endswith(('_INDEX', '_SAMPLES'))]
+    collections_to_delete
+    # for coll in collections_to_delete:
+        # # !!! ATTENZIONE: questa operazione è irreversibile, assicurati di avere un backup prima di eseguirla !!!
+        # delete_collection(db_connection, coll, confirm=False)
 #%%
 
 # --- FUNZIONI DI RETRIEVAL NODI ---
@@ -728,7 +817,10 @@ def get_distinct_property_values(db, collection_name, property_name):
 
 
 # --- FUNZIONI GRAFI ---
-def create_arango_graph(db_connection, graph_name='PKT_graph'):
+def create_arango_graph(db_connection, graph_name='PKT_graph',
+                        edge_collection='edges', 
+                        from_vertex_collections=['nodes'],
+                        to_vertex_collections=['nodes']):
     """Create an ArangoDB named graph from nodes and edges collections"""
     if db_connection is None:
         print("✗ No database connection available")
@@ -743,9 +835,9 @@ def create_arango_graph(db_connection, graph_name='PKT_graph'):
         # Define edge definitions for the graph
         edge_definitions = [
             {
-                'edge_collection': 'edges',
-                'from_vertex_collections': ['nodes'],
-                'to_vertex_collections': ['nodes']
+                'edge_collection': edge_collection,
+                'from_vertex_collections': from_vertex_collections,
+                'to_vertex_collections': to_vertex_collections
             }
         ]
         
@@ -757,8 +849,8 @@ def create_arango_graph(db_connection, graph_name='PKT_graph'):
         )
         
         print(f"✅ Graph '{graph_name}' created successfully!")
-        print(f"   - Vertex collections: nodes")
-        print(f"   - Edge collections: edges")
+        print(f"   - Vertex collections: {from_vertex_collections}")
+        print(f"   - Edge collections: {edge_collection}")
         
         # Get some statistics
         nodes_count = db_connection.collection('nodes').count()
@@ -1137,6 +1229,1207 @@ def visualize_arango_graph(db_connection, graph_name='PKT_graph',
         traceback.print_exc()
         return None
 
+def _resolve_center_node(db_connection, node_key=None, filters=None, node_collection='nodes'):
+    """Helper to locate the center node either by explicit key or by property filters."""
+    if node_key:
+        nodes_coll = db_connection.collection(node_collection)
+        return nodes_coll.get(node_key)
+
+    if filters:
+        filter_conditions = []
+        bind_vars = {'@node_coll': node_collection}
+        for idx, (prop, value) in enumerate(filters.items()):
+            filter_conditions.append(f"doc.{prop} == @value{idx}")
+            bind_vars[f"value{idx}"] = value
+        condition_str = " AND ".join(filter_conditions) if filter_conditions else "true"
+        aql = f"""
+            FOR doc IN @@node_coll
+                FILTER {condition_str}
+                LIMIT 1
+                RETURN doc
+        """
+        cursor = db_connection.aql.execute(aql, bind_vars=bind_vars)
+        return next(cursor, None)
+
+    return None
+
+
+def get_node_centric_graph(db_connection, node_key=None, filters=None, edge_limit=500,
+                           node_collection='nodes', edge_collection='edges'):
+    """Return a node-centric subgraph consisting of the center node, its 1-hop neighbors, and connecting edges."""
+    if db_connection is None:
+        print("✗ No database connection available")
+        return None
+
+    if not node_key and not filters:
+        print("✗ Provide either node_key or filters to identify the center node")
+        return None
+
+    center_node = _resolve_center_node(db_connection, node_key=node_key, filters=filters, node_collection=node_collection)
+    if not center_node:
+        print("✗ Center node not found with provided parameters")
+        return None
+
+    node_key = center_node['_key']
+    start_vertex = f"{node_collection}/{node_key}"
+
+    edge_query = """
+        FOR edge IN @@edge_coll
+            FILTER edge._from == @start_vertex OR edge._to == @start_vertex
+            LIMIT @edge_limit
+            RETURN edge
+    """
+    edges_cursor = db_connection.aql.execute(edge_query, bind_vars={
+        '@edge_coll': edge_collection,
+        'start_vertex': start_vertex, 
+        'edge_limit': edge_limit
+    })
+    edges_list = list(edges_cursor)
+
+    neighbor_keys = set()
+    for edge in edges_list:
+        neighbor_keys.add(edge['_from'].split('/')[1])
+        neighbor_keys.add(edge['_to'].split('/')[1])
+    neighbor_keys.discard(node_key)
+
+    neighbors = []
+    if neighbor_keys:
+        neighbors_query = """
+            FOR doc IN @@node_coll
+                FILTER doc._key IN @keys
+                RETURN doc
+        """
+        neighbors_cursor = db_connection.aql.execute(neighbors_query, bind_vars={
+            '@node_coll': node_collection,
+            'keys': list(neighbor_keys)
+        })
+        neighbors = list(neighbors_cursor)
+
+    result = {
+        'center_node': center_node,
+        'neighbors': neighbors,
+        'edges': edges_list
+    }
+
+    print(f"✓ Found center node {node_key} with {len(neighbors)} neighbors and {len(edges_list)} edges")
+    return result
+
+
+def traverse_node_centric_graph(db_connection, node_key=None, filters=None, depth=2, direction='ANY', limit=1000, graph_name='PKT_graph'):
+    """Perform a multi-hop traversal from a center node using the saved graph and return the induced subgraph."""
+    if db_connection is None:
+        print("✗ No database connection available")
+        return None
+
+    if not node_key and not filters:
+        print("✗ Provide either node_key or filters to identify the center node")
+        return None
+
+    direction_token = direction.upper()
+    if direction_token not in {'ANY', 'INBOUND', 'OUTBOUND'}:
+        print("✗ direction must be one of: 'ANY', 'INBOUND', 'OUTBOUND'")
+        return None
+
+    if depth < 1:
+        print("✗ depth must be >= 1")
+        return None
+
+    if not graph_name.replace('_', '').isalnum():
+        print("✗ graph_name contains invalid characters")
+        return None
+
+    if not db_connection.has_graph(graph_name):
+        print(f"✗ Graph '{graph_name}' does not exist. Create it with create_arango_graph() first.")
+        return None
+
+    center_node = _resolve_center_node(db_connection, node_key=node_key, filters=filters)
+    if not center_node:
+        print("✗ Center node not found with provided parameters")
+        return None
+
+    node_key = center_node['_key']
+    start_vertex = f"nodes/{node_key}"
+
+    traversal_query = f"""
+        FOR v, e IN 1..{depth} {direction_token} @start_vertex GRAPH '{graph_name}'
+            OPTIONS {{uniqueVertices: 'global', bfs: true}}
+            LIMIT @limit
+            RETURN {{vertex: v, edge: e}}
+    """
+
+    cursor = db_connection.aql.execute(traversal_query, bind_vars={'start_vertex': start_vertex, 'limit': limit})
+
+    nodes_dict = {node_key: center_node}
+    edges_list = []
+
+    for item in cursor:
+        vertex = item.get('vertex')
+        edge = item.get('edge')
+        if vertex and vertex['_key'] not in nodes_dict:
+            nodes_dict[vertex['_key']] = vertex
+        if edge:
+            edges_list.append(edge)
+
+    neighbors = [node for key, node in nodes_dict.items() if key != node_key]
+
+    result = {
+        'center_node': center_node,
+        'nodes': list(nodes_dict.values()),
+        'neighbors': neighbors,
+        'edges': edges_list,
+        'depth': depth
+    }
+
+    print(f"✓ Traversed depth {depth} from {node_key}: {len(nodes_dict)} nodes, {len(edges_list)} edges (limit {limit})")
+    return result
+
+
+# --- GRAPH QUERY FUNCTIONS ---
+
+def find_shortest_path(db_connection, start_key, end_key, direction='ANY',
+                       weight_attribute=None, graph_name='PKT_graph'):
+    """
+    Trova il percorso più breve tra due nodi.
+    
+    Args:
+        db_connection: Connessione ArangoDB
+        start_key: _key del nodo di partenza
+        end_key: _key del nodo di arrivo
+        direction: 'ANY', 'OUTBOUND', 'INBOUND'
+        weight_attribute: Nome attributo peso per weighted shortest path (None = unweighted)
+        graph_name: Nome del grafo
+    
+    Returns:
+        Dict con 'vertices', 'edges', 'distance' o None se non trovato
+    """
+    if db_connection is None:
+        print("✗ No database connection available")
+        return None
+    
+    if not db_connection.has_graph(graph_name):
+        print(f"✗ Graph '{graph_name}' does not exist")
+        return None
+    
+    direction = direction.upper()
+    if direction not in {'ANY', 'OUTBOUND', 'INBOUND'}:
+        print("✗ direction must be 'ANY', 'OUTBOUND', or 'INBOUND'")
+        return None
+    
+    start_vertex = f"nodes/{start_key}"
+    end_vertex = f"nodes/{end_key}"
+    
+    try:
+        if weight_attribute:
+            query = f"""
+                FOR v, e IN {direction} SHORTEST_PATH @start TO @end GRAPH '{graph_name}'
+                    OPTIONS {{weightAttribute: @weight}}
+                    RETURN {{vertex: v, edge: e}}
+            """
+            cursor = db_connection.aql.execute(query, bind_vars={
+                'start': start_vertex, 'end': end_vertex, 'weight': weight_attribute
+            })
+        else:
+            query = f"""
+                FOR v, e IN {direction} SHORTEST_PATH @start TO @end GRAPH '{graph_name}'
+                    RETURN {{vertex: v, edge: e}}
+            """
+            cursor = db_connection.aql.execute(query, bind_vars={
+                'start': start_vertex, 'end': end_vertex
+            })
+        
+        results = list(cursor)
+        
+        if not results:
+            print(f"✗ No path found between {start_key} and {end_key}")
+            return None
+        
+        vertices = [r['vertex'] for r in results if r['vertex']]
+        edges = [r['edge'] for r in results if r['edge']]
+        
+        result = {
+            'vertices': vertices,
+            'edges': edges,
+            'distance': len(edges),
+            'start': start_key,
+            'end': end_key
+        }
+        
+        print(f"✓ Found path: {start_key} → {end_key} (distance: {len(edges)} hops)")
+        return result
+        
+    except Exception as e:
+        print(f"✗ Error finding shortest path: {e}")
+        traceback.print_exc()
+        return None
+
+
+def find_k_shortest_paths(db_connection, start_key, end_key, k=5, direction='OUTBOUND',
+                          weight_attribute=None, graph_name='PKT_graph'):
+    """
+    Trova i k percorsi più brevi tra due nodi.
+    
+    Args:
+        db_connection: Connessione ArangoDB
+        start_key: _key del nodo di partenza
+        end_key: _key del nodo di arrivo
+        k: Numero di percorsi da restituire
+        direction: 'OUTBOUND' o 'INBOUND' (K_SHORTEST_PATHS non supporta ANY)
+        weight_attribute: Nome attributo peso (None = unweighted)
+        graph_name: Nome del grafo
+    
+    Returns:
+        Lista di path, ognuno con 'vertices', 'edges', 'weight'
+    """
+    if db_connection is None:
+        print("✗ No database connection available")
+        return []
+    
+    if not db_connection.has_graph(graph_name):
+        print(f"✗ Graph '{graph_name}' does not exist")
+        return []
+    
+    direction = direction.upper()
+    if direction not in {'OUTBOUND', 'INBOUND'}:
+        print("✗ direction must be 'OUTBOUND' or 'INBOUND' for K_SHORTEST_PATHS")
+        return []
+    
+    start_vertex = f"nodes/{start_key}"
+    end_vertex = f"nodes/{end_key}"
+    
+    try:
+        if weight_attribute:
+            query = f"""
+                FOR path IN {direction} K_SHORTEST_PATHS @start TO @end GRAPH '{graph_name}'
+                    OPTIONS {{weightAttribute: @weight}}
+                    LIMIT @k
+                    RETURN path
+            """
+            cursor = db_connection.aql.execute(query, bind_vars={
+                'start': start_vertex, 'end': end_vertex, 'weight': weight_attribute, 'k': k
+            })
+        else:
+            query = f"""
+                FOR path IN {direction} K_SHORTEST_PATHS @start TO @end GRAPH '{graph_name}'
+                    LIMIT @k
+                    RETURN path
+            """
+            cursor = db_connection.aql.execute(query, bind_vars={
+                'start': start_vertex, 'end': end_vertex, 'k': k
+            })
+        
+        paths = list(cursor)
+        
+        results = []
+        for i, path in enumerate(paths):
+            results.append({
+                'rank': i + 1,
+                'vertices': path.get('vertices', []),
+                'edges': path.get('edges', []),
+                'weight': path.get('weight', len(path.get('edges', [])))
+            })
+        
+        print(f"✓ Found {len(results)} paths between {start_key} and {end_key}")
+        return results
+        
+    except Exception as e:
+        print(f"✗ Error finding k shortest paths: {e}")
+        traceback.print_exc()
+        return []
+
+
+def find_all_shortest_paths(db_connection, start_key, end_key, direction='OUTBOUND',
+                            graph_name='PKT_graph'):
+    """
+    Trova tutti i percorsi minimi (stessa lunghezza) tra due nodi.
+    
+    Args:
+        db_connection: Connessione ArangoDB
+        start_key: _key del nodo di partenza
+        end_key: _key del nodo di arrivo
+        direction: 'OUTBOUND' o 'INBOUND'
+        graph_name: Nome del grafo
+    
+    Returns:
+        Lista di path con 'vertices' e 'edges'
+    """
+    if db_connection is None:
+        print("✗ No database connection available")
+        return []
+    
+    if not db_connection.has_graph(graph_name):
+        print(f"✗ Graph '{graph_name}' does not exist")
+        return []
+    
+    direction = direction.upper()
+    if direction not in {'OUTBOUND', 'INBOUND'}:
+        print("✗ direction must be 'OUTBOUND' or 'INBOUND' for ALL_SHORTEST_PATHS")
+        return []
+    
+    start_vertex = f"nodes/{start_key}"
+    end_vertex = f"nodes/{end_key}"
+    
+    try:
+        query = f"""
+            FOR path IN {direction} ALL_SHORTEST_PATHS @start TO @end GRAPH '{graph_name}'
+                RETURN path
+        """
+        cursor = db_connection.aql.execute(query, bind_vars={
+            'start': start_vertex, 'end': end_vertex
+        })
+        
+        paths = list(cursor)
+        
+        results = []
+        for path in paths:
+            results.append({
+                'vertices': path.get('vertices', []),
+                'edges': path.get('edges', [])
+            })
+        
+        if results:
+            print(f"✓ Found {len(results)} shortest paths (all same length: {len(results[0]['edges'])} hops)")
+        else:
+            print(f"✗ No paths found between {start_key} and {end_key}")
+        
+        return results
+        
+    except Exception as e:
+        print(f"✗ Error finding all shortest paths: {e}")
+        traceback.print_exc()
+        return []
+
+
+def find_pattern(db_connection, pattern_types, edge_filters=None, direction='OUTBOUND',
+                 limit=100, graph_name='PKT_graph'):
+    """
+    Trova motivi (pattern) nel grafo, es. gene → protein → disease.
+    
+    Args:
+        db_connection: Connessione ArangoDB
+        pattern_types: Lista di bioentity_type da matchare in sequenza
+                       Es: ['gene', 'protein', 'disease']
+        edge_filters: Dict opzionale con filtri per gli edge
+                      Es: {'predicate_label': 'regulates'}
+        direction: Direzione traversal ('OUTBOUND', 'INBOUND', 'ANY')
+        limit: Numero massimo di pattern da restituire
+        graph_name: Nome del grafo
+    
+    Returns:
+        Lista di pattern trovati, ognuno con i nodi matchati
+    """
+    if db_connection is None:
+        print("✗ No database connection available")
+        return []
+    
+    if not pattern_types or len(pattern_types) < 2:
+        print("✗ pattern_types must have at least 2 elements")
+        return []
+    
+    if not db_connection.has_graph(graph_name):
+        print(f"✗ Graph '{graph_name}' does not exist")
+        return []
+    
+    direction = direction.upper()
+    if direction not in {'OUTBOUND', 'INBOUND', 'ANY'}:
+        print("✗ direction must be 'OUTBOUND', 'INBOUND', or 'ANY'")
+        return []
+    
+    try:
+        # Costruisci la query dinamicamente
+        query_parts = []
+        return_fields = []
+        
+        # Primo nodo
+        query_parts.append(f"FOR v0 IN nodes")
+        query_parts.append(f"    FILTER v0.bioentity_type == @type0")
+        return_fields.append("v0")
+        
+        # Nodi successivi con traversal
+        for i in range(1, len(pattern_types)):
+            edge_var = f"e{i-1}"
+            node_var = f"v{i}"
+            
+            query_parts.append(f"    FOR {node_var}, {edge_var} IN 1..1 {direction} v{i-1} GRAPH '{graph_name}'")
+            query_parts.append(f"        FILTER {node_var}.bioentity_type == @type{i}")
+            
+            # Aggiungi filtri sugli edge se specificati
+            if edge_filters:
+                for key, value in edge_filters.items():
+                    query_parts.append(f"        FILTER {edge_var}.{key} == @edge_{key}")
+            
+            return_fields.append(node_var)
+            return_fields.append(edge_var)
+        
+        # Limit e return
+        query_parts.append(f"    LIMIT @limit")
+        return_obj = "{" + ", ".join([f"{f}: {f}" for f in return_fields]) + "}"
+        query_parts.append(f"    RETURN {return_obj}")
+        
+        query = "\n".join(query_parts)
+        
+        # Bind vars
+        bind_vars = {'limit': limit}
+        for i, ptype in enumerate(pattern_types):
+            bind_vars[f'type{i}'] = ptype
+        if edge_filters:
+            for key, value in edge_filters.items():
+                bind_vars[f'edge_{key}'] = value
+        
+        cursor = db_connection.aql.execute(query, bind_vars=bind_vars)
+        results = list(cursor)
+        
+        # Formatta i risultati
+        patterns = []
+        for r in results:
+            pattern = {'nodes': [], 'edges': []}
+            for i in range(len(pattern_types)):
+                node = r.get(f'v{i}')
+                if node:
+                    pattern['nodes'].append(node)
+                if i > 0:
+                    edge = r.get(f'e{i-1}')
+                    if edge:
+                        pattern['edges'].append(edge)
+            patterns.append(pattern)
+        
+        pattern_str = " → ".join(pattern_types)
+        print(f"✓ Found {len(patterns)} patterns matching: {pattern_str}")
+        return patterns
+        
+    except Exception as e:
+        print(f"✗ Error finding patterns: {e}")
+        traceback.print_exc()
+        return []
+
+
+def find_common_neighbors(db_connection, node_key_a, node_key_b, direction='ANY',
+                          filter_type=None, graph_name='PKT_graph'):
+    """
+    Trova i vicini comuni tra due nodi.
+    
+    Args:
+        db_connection: Connessione ArangoDB
+        node_key_a: _key del primo nodo
+        node_key_b: _key del secondo nodo
+        direction: Direzione ('ANY', 'OUTBOUND', 'INBOUND')
+        filter_type: Filtra per bioentity_type (es. 'protein')
+        graph_name: Nome del grafo
+    
+    Returns:
+        Dict con 'common_neighbors', 'only_a', 'only_b', 'jaccard_similarity'
+    """
+    if db_connection is None:
+        print("✗ No database connection available")
+        return None
+    
+    if not db_connection.has_graph(graph_name):
+        print(f"✗ Graph '{graph_name}' does not exist")
+        return None
+    
+    direction = direction.upper()
+    if direction not in {'ANY', 'OUTBOUND', 'INBOUND'}:
+        print("✗ direction must be 'ANY', 'OUTBOUND', or 'INBOUND'")
+        return None
+    
+    vertex_a = f"nodes/{node_key_a}"
+    vertex_b = f"nodes/{node_key_b}"
+    
+    try:
+        if filter_type:
+            query = f"""
+                LET neighbors_a = (
+                    FOR v IN 1..1 {direction} @vertex_a GRAPH '{graph_name}'
+                        FILTER v.bioentity_type == @filter_type
+                        RETURN v
+                )
+                LET neighbors_b = (
+                    FOR v IN 1..1 {direction} @vertex_b GRAPH '{graph_name}'
+                        FILTER v.bioentity_type == @filter_type
+                        RETURN v
+                )
+                LET keys_a = neighbors_a[*]._key
+                LET keys_b = neighbors_b[*]._key
+                LET common_keys = INTERSECTION(keys_a, keys_b)
+                LET only_a_keys = MINUS(keys_a, keys_b)
+                LET only_b_keys = MINUS(keys_b, keys_a)
+                RETURN {{
+                    common: (FOR n IN neighbors_a FILTER n._key IN common_keys RETURN n),
+                    only_a: (FOR n IN neighbors_a FILTER n._key IN only_a_keys RETURN n),
+                    only_b: (FOR n IN neighbors_b FILTER n._key IN only_b_keys RETURN n),
+                    count_a: LENGTH(keys_a),
+                    count_b: LENGTH(keys_b),
+                    count_common: LENGTH(common_keys)
+                }}
+            """
+            cursor = db_connection.aql.execute(query, bind_vars={
+                'vertex_a': vertex_a, 'vertex_b': vertex_b, 'filter_type': filter_type
+            })
+        else:
+            query = f"""
+                LET neighbors_a = (
+                    FOR v IN 1..1 {direction} @vertex_a GRAPH '{graph_name}'
+                        RETURN v
+                )
+                LET neighbors_b = (
+                    FOR v IN 1..1 {direction} @vertex_b GRAPH '{graph_name}'
+                        RETURN v
+                )
+                LET keys_a = neighbors_a[*]._key
+                LET keys_b = neighbors_b[*]._key
+                LET common_keys = INTERSECTION(keys_a, keys_b)
+                LET only_a_keys = MINUS(keys_a, keys_b)
+                LET only_b_keys = MINUS(keys_b, keys_a)
+                RETURN {{
+                    common: (FOR n IN neighbors_a FILTER n._key IN common_keys RETURN n),
+                    only_a: (FOR n IN neighbors_a FILTER n._key IN only_a_keys RETURN n),
+                    only_b: (FOR n IN neighbors_b FILTER n._key IN only_b_keys RETURN n),
+                    count_a: LENGTH(keys_a),
+                    count_b: LENGTH(keys_b),
+                    count_common: LENGTH(common_keys)
+                }}
+            """
+            cursor = db_connection.aql.execute(query, bind_vars={
+                'vertex_a': vertex_a, 'vertex_b': vertex_b
+            })
+        
+        result = next(cursor, None)
+        
+        if not result:
+            print(f"✗ Could not compute common neighbors")
+            return None
+        
+        # Calcola Jaccard similarity
+        union_size = result['count_a'] + result['count_b'] - result['count_common']
+        jaccard = result['count_common'] / union_size if union_size > 0 else 0.0
+        
+        output = {
+            'node_a': node_key_a,
+            'node_b': node_key_b,
+            'common_neighbors': result['common'],
+            'only_a_neighbors': result['only_a'],
+            'only_b_neighbors': result['only_b'],
+            'count_common': result['count_common'],
+            'count_a': result['count_a'],
+            'count_b': result['count_b'],
+            'jaccard_similarity': round(jaccard, 4)
+        }
+        
+        print(f"✓ {node_key_a} and {node_key_b}: {result['count_common']} common neighbors (Jaccard: {jaccard:.3f})")
+        return output
+        
+    except Exception as e:
+        print(f"✗ Error finding common neighbors: {e}")
+        traceback.print_exc()
+        return None
+
+
+def get_node_neighbors(db_connection, node_key, direction='ANY', depth=1,
+                       filter_type=None, limit=500, graph_name='PKT_graph'):
+    """
+    Ottiene i vicini di un nodo a una certa profondità.
+    
+    Args:
+        db_connection: Connessione ArangoDB
+        node_key: _key del nodo centrale
+        direction: 'ANY', 'OUTBOUND', 'INBOUND'
+        depth: Profondità del vicinato (1 = vicini diretti)
+        filter_type: Filtra per bioentity_type
+        limit: Numero massimo di vicini
+        graph_name: Nome del grafo
+    
+    Returns:
+        Lista di nodi vicini
+    """
+    if db_connection is None:
+        print("✗ No database connection available")
+        return []
+    
+    if not db_connection.has_graph(graph_name):
+        print(f"✗ Graph '{graph_name}' does not exist")
+        return []
+    
+    direction = direction.upper()
+    start_vertex = f"nodes/{node_key}"
+    
+    try:
+        if filter_type:
+            query = f"""
+                FOR v IN 1..@depth {direction} @start GRAPH '{graph_name}'
+                    FILTER v.bioentity_type == @filter_type
+                    LIMIT @limit
+                    RETURN DISTINCT v
+            """
+            cursor = db_connection.aql.execute(query, bind_vars={
+                'start': start_vertex, 'depth': depth, 'filter_type': filter_type, 'limit': limit
+            })
+        else:
+            query = f"""
+                FOR v IN 1..@depth {direction} @start GRAPH '{graph_name}'
+                    LIMIT @limit
+                    RETURN DISTINCT v
+            """
+            cursor = db_connection.aql.execute(query, bind_vars={
+                'start': start_vertex, 'depth': depth, 'limit': limit
+            })
+        
+        neighbors = list(cursor)
+        
+        type_info = f" (type: {filter_type})" if filter_type else ""
+        print(f"✓ Found {len(neighbors)} neighbors of {node_key} at depth {depth}{type_info}")
+        return neighbors
+        
+    except Exception as e:
+        print(f"✗ Error getting neighbors: {e}")
+        traceback.print_exc()
+        return []
+
+
+def plot_subgraph(subgraph, layout='spring', node_size=400, figsize=(14, 10), 
+                  show_labels=True, highlight_center=True, save_path=None):
+    """
+    Visualizza un sottografo restituito da get_node_centric_graph o traverse_node_centric_graph.
+    
+    Args:
+        subgraph: Dizionario con 'center_node', 'neighbors'/'nodes', 'edges'
+        layout: Algoritmo di layout ('spring', 'circular', 'kamada_kawai', 'shell')
+        node_size: Dimensione dei nodi
+        figsize: Dimensione della figura (width, height)
+        show_labels: Se True, mostra le etichette sui nodi
+        highlight_center: Se True, evidenzia il nodo centrale
+        save_path: Percorso per salvare l'immagine (None = non salva)
+    
+    Returns:
+        NetworkX DiGraph object
+    """
+    try:
+        import networkx as nx
+        import matplotlib.pyplot as plt
+        from collections import defaultdict
+        
+        if subgraph is None:
+            print("✗ Subgraph is None")
+            return None
+        
+        center_node = subgraph.get('center_node')
+        edges_list = subgraph.get('edges', [])
+        
+        # Supporta sia 'nodes' (da traverse) che 'neighbors' (da get_node_centric)
+        if 'nodes' in subgraph:
+            all_nodes = subgraph['nodes']
+        else:
+            all_nodes = [center_node] + subgraph.get('neighbors', [])
+        
+        if not all_nodes:
+            print("✗ No nodes in subgraph")
+            return None
+        
+        # Crea grafo NetworkX
+        G = nx.DiGraph()
+        
+        # Mappa nodi per lookup veloce
+        nodes_map = {node['_key']: node for node in all_nodes}
+        
+        # Aggiungi nodi con attributi
+        bioentity_types = defaultdict(list)
+        for node in all_nodes:
+            node_key = node['_key']
+            attrs = {k: v for k, v in node.items() if not k.startswith('_')}
+            G.add_node(node_key, **attrs)
+            bioentity_types[node.get('bioentity_type', 'unknown')].append(node_key)
+        
+        # Aggiungi archi
+        edge_labels_map = defaultdict(int)
+        for edge in edges_list:
+            source = edge['_from'].split('/')[1]
+            target = edge['_to'].split('/')[1]
+            if source in nodes_map and target in nodes_map:
+                attrs = {k: v for k, v in edge.items() if not k.startswith('_')}
+                G.add_edge(source, target, **attrs)
+                edge_labels_map[edge.get('predicate_label', 'related')] += 1
+        
+        # Layout
+        if layout == 'spring':
+            pos = nx.spring_layout(G, k=1.5, iterations=50, seed=42)
+        elif layout == 'circular':
+            pos = nx.circular_layout(G)
+        elif layout == 'kamada_kawai':
+            pos = nx.kamada_kawai_layout(G)
+        elif layout == 'shell':
+            # Metti il centro al centro, i vicini attorno
+            center_key = center_node['_key'] if center_node else None
+            shells = [[center_key]] if center_key else []
+            other_nodes = [n for n in G.nodes() if n != center_key]
+            if other_nodes:
+                shells.append(other_nodes)
+            pos = nx.shell_layout(G, nlist=shells if len(shells) > 1 else None)
+        else:
+            pos = nx.random_layout(G)
+        
+        # Colori per bioentity type
+        color_map = {
+            'protein': '#FF6B6B',
+            'gene': '#4ECDC4',
+            'rna': '#AA96DA',
+            'chemical': '#95E1D3',
+            'disease': '#F38181',
+            'pathway': '#FEE191',
+            'phenotype': '#FFB6B9',
+            'metabolite': '#FCBAD3',
+            'go': '#A8D8EA',
+            'unknown': '#CCCCCC'
+        }
+        
+        node_colors = []
+        for node_key in G.nodes():
+            node_data = nodes_map.get(node_key, {})
+            btype = node_data.get('bioentity_type', 'unknown')
+            node_colors.append(color_map.get(btype, '#CCCCCC'))
+        
+        # Plot
+        plt.figure(figsize=figsize)
+        
+        # Disegna tutti i nodi
+        nx.draw_networkx_nodes(G, pos, node_color=node_colors, 
+                               node_size=node_size, alpha=0.85)
+        
+        # Evidenzia nodo centrale
+        if highlight_center and center_node:
+            center_key = center_node['_key']
+            if center_key in G.nodes():
+                nx.draw_networkx_nodes(G, pos, nodelist=[center_key],
+                                       node_color='gold', node_size=node_size * 1.8,
+                                       edgecolors='black', linewidths=2)
+        
+        # Disegna archi
+        nx.draw_networkx_edges(G, pos, edge_color='gray', 
+                               arrows=True, arrowsize=12, 
+                               alpha=0.5, width=0.8,
+                               connectionstyle="arc3,rad=0.1")
+        
+        # Etichette
+        if show_labels and len(G.nodes()) <= 50:
+            labels = {}
+            for node_key in G.nodes():
+                node_data = nodes_map.get(node_key, {})
+                label = node_data.get('label', node_key)
+                labels[node_key] = label[:20] + '...' if len(str(label)) > 20 else label
+            nx.draw_networkx_labels(G, pos, labels, font_size=8, font_weight='bold')
+        
+        # Legenda
+        legend_elements = []
+        from matplotlib.patches import Patch
+        for btype, nodes in sorted(bioentity_types.items(), key=lambda x: -len(x[1])):
+            color = color_map.get(btype, '#CCCCCC')
+            legend_elements.append(Patch(facecolor=color, label=f'{btype} ({len(nodes)})'))
+        
+        if legend_elements:
+            plt.legend(handles=legend_elements, loc='upper left', fontsize=8)
+        
+        # Titolo
+        center_label = center_node.get('label', center_node.get('_key', '?')) if center_node else '?'
+        depth_info = f", depth={subgraph.get('depth', 1)}" if 'depth' in subgraph else ''
+        plt.title(f"Subgraph: {center_label}\n({len(G.nodes())} nodes, {len(G.edges())} edges{depth_info})",
+                  fontsize=14, fontweight='bold')
+        
+        plt.axis('off')
+        plt.tight_layout()
+        
+        # Salva se richiesto
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            print(f"✓ Saved plot to: {save_path}")
+        
+        plt.show()
+        
+        # Stampa statistiche
+        print(f"\n📈 Subgraph statistics:")
+        print(f"   Nodes by bioentity_type:")
+        for btype, nodes in sorted(bioentity_types.items(), key=lambda x: -len(x[1])):
+            print(f"     • {btype}: {len(nodes)}")
+        print(f"   Edges by predicate_label (top 5):")
+        for label, count in sorted(edge_labels_map.items(), key=lambda x: -x[1])[:5]:
+            print(f"     • {label}: {count}")
+        
+        return G
+        
+    except ImportError:
+        print("✗ Missing libraries. Install with: pip install networkx matplotlib")
+        return None
+    except Exception as e:
+        print(f"✗ Error plotting subgraph: {e}")
+        traceback.print_exc()
+        return None
+
+
+def plot_graph_result(result, layout='kamada_kawai', node_size=400, figsize=(14, 10),
+                      show_labels=True, highlight_endpoints=True, save_path=None,
+                      title=None, path_index=0):
+    """
+    Funzione universale per plottare output di tutte le funzioni graph query.
+    
+    Rileva automaticamente il tipo di risultato:
+    - Shortest path: dict con 'vertices' e 'edges'
+    - K shortest paths / All shortest paths: lista di path
+    - Pattern matching: lista di pattern con 'nodes' e 'edges'
+    - Common neighbors: dict con 'common_neighbors', 'only_a_neighbors', etc.
+    - Node neighbors: lista di nodi
+    - Subgraph (traversal): dict con 'center_node', 'neighbors'/'nodes', 'edges'
+    
+    Args:
+        result: Output di una delle funzioni graph query
+        layout: 'spring', 'circular', 'kamada_kawai', 'shell', 'path'
+        node_size: Dimensione nodi
+        figsize: Dimensione figura
+        show_labels: Mostra etichette
+        highlight_endpoints: Evidenzia nodi start/end per path
+        save_path: Percorso per salvare immagine
+        title: Titolo custom (None = auto)
+        path_index: Per k_shortest_paths, quale path plottare (0 = primo)
+    
+    Returns:
+        NetworkX DiGraph o None
+    
+    Esempi:
+        # Shortest path
+        path = find_shortest_path(db, 'A', 'B')
+        plot_graph_result(path)
+        
+        # K shortest paths (plotta il terzo path)
+        paths = find_k_shortest_paths(db, 'A', 'B', k=5)
+        plot_graph_result(paths, path_index=2)
+        
+        # Pattern matching
+        patterns = find_pattern(db, ['gene', 'protein', 'disease'])
+        plot_graph_result(patterns)  # plotta tutti i pattern sovrapposti
+        
+        # Common neighbors
+        common = find_common_neighbors(db, 'A', 'B')
+        plot_graph_result(common)
+        
+        # Node neighbors
+        neighbors = get_node_neighbors(db, 'A', depth=2)
+        plot_graph_result(neighbors)
+        
+        # Traversal subgraph
+        subgraph = traverse_node_centric_graph(db, node_key='A', depth=2)
+        plot_graph_result(subgraph)
+    """
+    try:
+        import networkx as nx
+        import matplotlib.pyplot as plt
+        from collections import defaultdict
+        from matplotlib.patches import Patch
+        
+        if result is None:
+            print("✗ Result is None")
+            return None
+        
+        # --- DETECT RESULT TYPE ---
+        result_type = None
+        nodes_list = []
+        edges_list = []
+        special_nodes = {}  # per evidenziare nodi speciali
+        auto_title = "Graph Result"
+        
+        # Caso 1: Shortest path singolo
+        if isinstance(result, dict) and 'vertices' in result and 'start' in result:
+            result_type = 'shortest_path'
+            nodes_list = result.get('vertices', [])
+            edges_list = result.get('edges', [])
+            special_nodes['start'] = result.get('start')
+            special_nodes['end'] = result.get('end')
+            auto_title = f"Shortest Path: {result.get('start')} → {result.get('end')} ({result.get('distance', '?')} hops)"
+        
+        # Caso 2: K shortest paths o All shortest paths (lista di path)
+        elif isinstance(result, list) and len(result) > 0 and isinstance(result[0], dict) and 'vertices' in result[0]:
+            result_type = 'k_paths'
+            if path_index >= len(result):
+                print(f"✗ path_index {path_index} out of range (max {len(result)-1})")
+                path_index = 0
+            selected_path = result[path_index]
+            nodes_list = selected_path.get('vertices', [])
+            edges_list = selected_path.get('edges', [])
+            if nodes_list:
+                special_nodes['start'] = nodes_list[0].get('_key') if isinstance(nodes_list[0], dict) else None
+                special_nodes['end'] = nodes_list[-1].get('_key') if isinstance(nodes_list[-1], dict) else None
+            rank = selected_path.get('rank', path_index + 1)
+            weight = selected_path.get('weight', len(edges_list))
+            auto_title = f"Path {rank}/{len(result)} (weight: {weight})"
+        
+        # Caso 3: Pattern matching (lista di pattern con 'nodes')
+        elif isinstance(result, list) and len(result) > 0 and isinstance(result[0], dict) and 'nodes' in result[0]:
+            result_type = 'patterns'
+            # Combina tutti i pattern in un grafo
+            all_nodes = {}
+            all_edges = []
+            for pattern in result:
+                for node in pattern.get('nodes', []):
+                    all_nodes[node['_key']] = node
+                all_edges.extend(pattern.get('edges', []))
+            nodes_list = list(all_nodes.values())
+            edges_list = all_edges
+            auto_title = f"Pattern Matching ({len(result)} patterns found)"
+        
+        # Caso 4: Common neighbors
+        elif isinstance(result, dict) and 'common_neighbors' in result:
+            result_type = 'common_neighbors'
+            # Crea nodi fittizi per A e B
+            fake_node_a = {'_key': result['node_a'], 'bioentity_type': 'query', 'label': result['node_a']}
+            fake_node_b = {'_key': result['node_b'], 'bioentity_type': 'query', 'label': result['node_b']}
+            nodes_list = [fake_node_a, fake_node_b] + result.get('common_neighbors', [])
+            # Aggiungi anche solo_a e solo_b se presenti
+            nodes_list.extend(result.get('only_a_neighbors', []))
+            nodes_list.extend(result.get('only_b_neighbors', []))
+            # Non abbiamo edges reali, ma possiamo creare connessioni concettuali
+            edges_list = []
+            special_nodes['start'] = result['node_a']
+            special_nodes['end'] = result['node_b']
+            jaccard = result.get('jaccard_similarity', 0)
+            auto_title = f"Common Neighbors: {result['node_a']} ∩ {result['node_b']}\n(Jaccard: {jaccard:.3f}, Common: {result.get('count_common', 0)})"
+        
+        # Caso 5: Lista di nodi (get_node_neighbors)
+        elif isinstance(result, list) and len(result) > 0 and isinstance(result[0], dict) and '_key' in result[0] and 'vertices' not in result[0]:
+            result_type = 'neighbors_list'
+            nodes_list = result
+            edges_list = []
+            auto_title = f"Node Neighbors ({len(result)} nodes)"
+        
+        # Caso 6: Subgraph da traversal (ha center_node)
+        elif isinstance(result, dict) and 'center_node' in result:
+            # Usa la funzione esistente plot_subgraph
+            return plot_subgraph(result, layout=layout, node_size=node_size, figsize=figsize,
+                                 show_labels=show_labels, highlight_center=highlight_endpoints,
+                                 save_path=save_path)
+        
+        else:
+            print("✗ Cannot detect result type. Supported: shortest_path, k_paths, patterns, common_neighbors, neighbors_list, subgraph")
+            return None
+        
+        if not nodes_list:
+            print("✗ No nodes to plot")
+            return None
+        
+        # --- BUILD NETWORKX GRAPH ---
+        G = nx.DiGraph()
+        
+        # Mappa nodi
+        nodes_map = {}
+        for node in nodes_list:
+            if isinstance(node, dict) and '_key' in node:
+                nodes_map[node['_key']] = node
+        
+        # Aggiungi nodi
+        bioentity_types = defaultdict(list)
+        for node_key, node in nodes_map.items():
+            attrs = {k: v for k, v in node.items() if not k.startswith('_')}
+            G.add_node(node_key, **attrs)
+            bioentity_types[node.get('bioentity_type', 'unknown')].append(node_key)
+        
+        # Aggiungi archi
+        edge_labels_map = defaultdict(int)
+        for edge in edges_list:
+            if isinstance(edge, dict) and '_from' in edge and '_to' in edge:
+                source = edge['_from'].split('/')[1]
+                target = edge['_to'].split('/')[1]
+                if source in nodes_map and target in nodes_map:
+                    attrs = {k: v for k, v in edge.items() if not k.startswith('_')}
+                    G.add_edge(source, target, **attrs)
+                    edge_labels_map[edge.get('predicate_label', 'related')] += 1
+        
+        # --- LAYOUT ---
+        if layout == 'path' and result_type in ('shortest_path', 'k_paths'):
+            # Layout lineare per path
+            pos = {}
+            for i, node_key in enumerate(G.nodes()):
+                pos[node_key] = (i, 0)
+        elif layout == 'spring':
+            pos = nx.spring_layout(G, k=1.5, iterations=50, seed=42)
+        elif layout == 'circular':
+            pos = nx.circular_layout(G)
+        elif layout == 'kamada_kawai':
+            try:
+                pos = nx.kamada_kawai_layout(G)
+            except:
+                pos = nx.spring_layout(G, seed=42)
+        elif layout == 'shell':
+            pos = nx.shell_layout(G)
+        else:
+            pos = nx.spring_layout(G, seed=42)
+        
+        # --- COLORI ---
+        color_map = {
+            'protein': '#FF6B6B',
+            'gene': '#4ECDC4',
+            'rna': '#AA96DA',
+            'chemical': '#95E1D3',
+            'disease': '#F38181',
+            'pathway': '#FEE191',
+            'phenotype': '#FFB6B9',
+            'metabolite': '#FCBAD3',
+            'go': '#A8D8EA',
+            'query': '#FFD700',
+            'unknown': '#CCCCCC'
+        }
+        
+        node_colors = []
+        for node_key in G.nodes():
+            node_data = nodes_map.get(node_key, {})
+            btype = node_data.get('bioentity_type', 'unknown')
+            node_colors.append(color_map.get(btype, '#CCCCCC'))
+        
+        # --- PLOT ---
+        plt.figure(figsize=figsize)
+        
+        # Nodi base
+        nx.draw_networkx_nodes(G, pos, node_color=node_colors, 
+                               node_size=node_size, alpha=0.85)
+        
+        # Evidenzia endpoint
+        if highlight_endpoints:
+            highlight_list = []
+            for key in ['start', 'end']:
+                node_key = special_nodes.get(key)
+                if node_key and node_key in G.nodes():
+                    highlight_list.append(node_key)
+            if highlight_list:
+                colors = ['#00FF00', '#FF0000'][:len(highlight_list)]  # verde=start, rosso=end
+                for i, node_key in enumerate(highlight_list):
+                    nx.draw_networkx_nodes(G, pos, nodelist=[node_key],
+                                           node_color=colors[i], node_size=node_size * 1.5,
+                                           edgecolors='black', linewidths=2)
+        
+        # Archi
+        if G.edges():
+            nx.draw_networkx_edges(G, pos, edge_color='gray', 
+                                   arrows=True, arrowsize=12, 
+                                   alpha=0.6, width=1.2,
+                                   connectionstyle="arc3,rad=0.1")
+        
+        # Etichette
+        if show_labels and len(G.nodes()) <= 60:
+            labels = {}
+            for node_key in G.nodes():
+                node_data = nodes_map.get(node_key, {})
+                label = node_data.get('label', node_key)
+                labels[node_key] = str(label)[:18] + '...' if len(str(label)) > 18 else str(label)
+            nx.draw_networkx_labels(G, pos, labels, font_size=8, font_weight='bold')
+        
+        # Legenda
+        legend_elements = []
+        for btype, nodes in sorted(bioentity_types.items(), key=lambda x: -len(x[1])):
+            color = color_map.get(btype, '#CCCCCC')
+            legend_elements.append(Patch(facecolor=color, label=f'{btype} ({len(nodes)})'))
+        
+        if highlight_endpoints and special_nodes.get('start'):
+            legend_elements.append(Patch(facecolor='#00FF00', label='Start'))
+        if highlight_endpoints and special_nodes.get('end'):
+            legend_elements.append(Patch(facecolor='#FF0000', label='End'))
+        
+        if legend_elements:
+            plt.legend(handles=legend_elements, loc='upper left', fontsize=8)
+        
+        # Titolo
+        final_title = title if title else auto_title
+        plt.title(f"{final_title}\n({len(G.nodes())} nodes, {len(G.edges())} edges)",
+                  fontsize=13, fontweight='bold')
+        
+        plt.axis('off')
+        plt.tight_layout()
+        
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            print(f"✓ Saved plot to: {save_path}")
+        
+        plt.show()
+        
+        # Stats
+        print(f"\n📈 Result statistics:")
+        print(f"   Type: {result_type}")
+        print(f"   Nodes by bioentity_type:")
+        for btype, nodes in sorted(bioentity_types.items(), key=lambda x: -len(x[1])):
+            print(f"     • {btype}: {len(nodes)}")
+        if edge_labels_map:
+            print(f"   Edges by predicate_label:")
+            for label, count in sorted(edge_labels_map.items(), key=lambda x: -x[1])[:5]:
+                print(f"     • {label}: {count}")
+        
+        return G
+        
+    except ImportError:
+        print("✗ Missing libraries. Install with: pip install networkx matplotlib")
+        return None
+    except Exception as e:
+        print(f"✗ Error plotting result: {e}")
+        traceback.print_exc()
+        return None
+
+# --- ESEMPI DI UTILIZZO DELLE NUOVE FUNZIONI ---
+# 
+# Tutte le funzioni graph query possono essere visualizzate con plot_graph_result()
+# che rileva automaticamente il tipo di output e lo visualizza appropriatamente.
+#
+# # Shortest Path
+# path = find_shortest_path(db, 'PR_Q9H609', 'DOID_162', direction='ANY')
+# plot_graph_result(path)  # auto-detect shortest_path
+# plot_graph_result(path, layout='path', save_path='shortest_path.png')  # layout lineare
+# 
+# # K Shortest Paths
+# paths = find_k_shortest_paths(db, 'PR_Q9H609', 'DOID_162', k=10, direction='OUTBOUND')
+# plot_graph_result(paths)  # plotta il primo path
+# plot_graph_result(paths, path_index=2)  # plotta il terzo path
+# 
+# # All Shortest Paths
+# all_paths = find_all_shortest_paths(db, 'PR_Q9H609', 'DOID_162')
+# plot_graph_result(all_paths, path_index=0)
+# 
+# # Pattern Matching: gene → protein → disease
+# patterns = find_pattern(db, ['gene', 'protein', 'disease'], limit=50)
+# plot_graph_result(patterns)  # combina tutti i pattern in un grafo
+# 
+# # Common Neighbors
+# common = find_common_neighbors(db, 'PR_Q9H609', 'PR_P12345')
+# plot_graph_result(common)  # mostra nodi A, B e vicini comuni
+# 
+# # Node Neighbors (lista di nodi)
+# neighbors = get_node_neighbors(db, 'PR_Q9H609', depth=2, filter_type='gene')
+# plot_graph_result(neighbors)
+#
+# # Subgraph/Traversal (usa center_node, quindi rileva automaticamente)
+# subgraph = traverse_node_centric_graph(db, node_key='PR_Q9H609', depth=2)
+# plot_graph_result(subgraph)  # equivalente a plot_subgraph()
+
+#%%
+
+#%% Test Graph Retrieval and Visualization
+
+if __name__ == "__main__":
+    # --- ESEMPI DI UTILIZZO ---
+    # Esempio 1: get_node_centric_graph (1-hop)
+    query = 'PR_Q9H609'
+    subgraph = get_node_centric_graph(db, node_key=query)
+    # subgraph = get_node_centric_graph(db, filters={'label': 'TP53'}, edge_limit=100)
+    plot_subgraph(subgraph, layout='kamada_kawai', highlight_center=True, save_path=f'{query}_subgraph.png')
+
+#%%
+if __name__ == "__main__":
+    # Esempio 2: traverse_node_centric_graph (multi-hop)
+    db = setup_arangodb_connection()
+    query = 'PR_Q9H609'
+    create_arango_graph(db, graph_name='PKT_graph')  # crea il grafo se non esiste
+    subgraph = traverse_node_centric_graph(db, node_key=query, depth=4, limit=50)
+    # subgraph = traverse_node_centric_graph(db, filters={'class_code': 'EntrezID'}, depth=3, direction='OUTBOUND')
+    plot_subgraph(subgraph, layout='spring', highlight_center=True, save_path=f'{query}_traversal.png')
+
+#%%
+if __name__ == "__main__":
+    # Esempio 3: Visualizzare il sottografo
+    db = setup_arangodb_connection()
+    query = 'PR_Q9H609'
+    G = plot_subgraph(subgraph, layout='spring', highlight_center=True)
+    
+    # oppure con traversal multi-hop
+    subgraph = traverse_node_centric_graph(db, node_key='PR_Q9H609', depth=2, limit=100)
+    G = plot_subgraph(subgraph, layout='shell', save_path='subgraph.png')
 
 
 #%%
@@ -1371,12 +2664,12 @@ if __name__ == "__main__":
         print("",node["_key"], node.get("label", "N/A")) 
 
 #%%
-# serche for _key contains "H7C1B8"
-patterns_to_test = """Q96HL8
-"""
-patterns_to_test = patterns_to_test.strip().split("\n")
 
 if __name__ == "__main__":
+    # serche for _key contains "H7C1B8"
+    patterns_to_test = "Q96HL8"
+    patterns_to_test = patterns_to_test.strip().split("\n")
+
     for pattern in patterns_to_test:
         pattern = f"%{pattern}%"
         string_prop = "_key"
@@ -1452,3 +2745,84 @@ node.json
   },
 """
 
+"""
+Oltre al **traversal** già implementato, ArangoDB supporta diverse query su grafi:
+
+### 1. **Shortest Path** (percorso più breve)
+```aql
+FOR v, e IN OUTBOUND SHORTEST_PATH 'nodes/A' TO 'nodes/B' GRAPH 'PKT_graph'
+    RETURN {vertex: v, edge: e}
+```
+
+### 2. **K Shortest Paths** (k percorsi più brevi)
+```aql
+FOR path IN OUTBOUND K_SHORTEST_PATHS 'nodes/A' TO 'nodes/B' GRAPH 'PKT_graph'
+    LIMIT 5
+    RETURN path
+```
+
+### 3. **K Paths** (tutti i percorsi fino a k, senza ottimizzazione peso)
+```aql
+FOR path IN 1..5 OUTBOUND K_PATHS 'nodes/A' TO 'nodes/B' GRAPH 'PKT_graph'
+    RETURN path
+```
+
+### 4. **All Shortest Paths** (tutti i percorsi minimi)
+```aql
+FOR path IN OUTBOUND ALL_SHORTEST_PATHS 'nodes/A' TO 'nodes/B' GRAPH 'PKT_graph'
+    RETURN path
+```
+
+### 5. **Pattern Matching** (subgraph isomorphism)
+```aql
+FOR v1 IN nodes
+    FILTER v1.bioentity_type == 'gene'
+    FOR v2, e1 IN 1..1 OUTBOUND v1 GRAPH 'PKT_graph'
+        FILTER v2.bioentity_type == 'protein'
+        FOR v3, e2 IN 1..1 OUTBOUND v2 GRAPH 'PKT_graph'
+            FILTER v3.bioentity_type == 'disease'
+            RETURN {gene: v1, protein: v2, disease: v3}
+```
+
+### 6. **Neighbor Query** (vicini diretti)
+```aql
+FOR v IN 1..1 ANY 'nodes/TP53' GRAPH 'PKT_graph'
+    RETURN v
+```
+
+### 7. **Common Neighbors** (vicini comuni tra due nodi)
+```aql
+LET neighbors_a = (FOR v IN 1..1 ANY 'nodes/A' GRAPH 'PKT_graph' RETURN v._key)
+LET neighbors_b = (FOR v IN 1..1 ANY 'nodes/B' GRAPH 'PKT_graph' RETURN v._key)
+RETURN INTERSECTION(neighbors_a, neighbors_b)
+```
+
+### 8. **Prune/Filter durante traversal**
+```aql
+FOR v, e, p IN 1..3 OUTBOUND 'nodes/start' GRAPH 'PKT_graph'
+    PRUNE v.bioentity_type == 'disease'  -- ferma il ramo qui
+    FILTER e.predicate_label == 'regulates'
+    RETURN p
+```
+
+### 9. **Weighted Shortest Path**
+```aql
+FOR v, e IN OUTBOUND SHORTEST_PATH 'nodes/A' TO 'nodes/B' GRAPH 'PKT_graph'
+    OPTIONS {weightAttribute: 'weight'}
+    RETURN {v, e}
+```
+
+### 10. **Centrality / PageRank** (tramite Pregel o SmartGraphs)
+```javascript
+// Via API o arangosh
+var pregel = require("@arangodb/pregel");
+pregel.start("pagerank", "PKT_graph", {maxGSS: 100, resultField: "rank"});
+```
+
+---
+
+**Vuoi che implementi una o più di queste come funzioni Python nel tuo arangodb_utils.py?** Le più utili per knowledge graph biomedici sono tipicamente:
+- **Shortest Path** (trovare connessioni tra entità)
+- **Pattern Matching** (trovare motivi gene→protein→disease)
+- **Common Neighbors** (entità che collegano due nodi)
+"""
