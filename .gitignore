@@ -20,6 +20,7 @@ kg_benchmark/*
 
 #ignore
 gnn/*
+paper*
 
 # ignore all files in kg-benchmark/pkt_data/builds directory
 kg-benchmark/pkt/pkt_data/builds/*
@@ -48,6 +49,10 @@ webpagetext_scraper.py
 
 # scrpts
 scripts/pkt_read.pickle*
+scripts/temp_bio*
+scripts/archive*
+scripts/docs*
+scripts/dumps*
 
 
 # ignore all files .owl .obo .tsv .nt .csv 

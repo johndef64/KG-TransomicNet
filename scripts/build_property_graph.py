@@ -1,4 +1,10 @@
 #%%
+
+"""
+Docstring for scripts.build_property_graph
+Version 0.2 
+"""
+
 import pandas as pd
 import json
 import re

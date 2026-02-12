@@ -1,5 +1,6 @@
 #%%
 """
+Version: 0.3
 """
 
 from sqlalchemy import null
@@ -464,7 +465,56 @@ Quanti e quali nodi intermedi prende:
 - Non aggiunge nodi intermedi alla lista `nodes`; crea solo i nodi delle feature omiche del campione.
 - Recupera nodi adiacenti solo come parte di `edges`: per ogni arco restituisce il nodo vicino nel campo `neighbor`, limitato al 1-hop sui `kg_node_key` trovati e al `limit` (default 5000) di `get_edges_for_node_keys`.
 """
+#%%
 
+#%%
+# --- Load graph to ArangoDB ---
+import load_graph_to_arangodb
+import arangodb_utils
+reload(load_graph_to_arangodb)
+reload(arangodb_utils)
+from arangodb_utils import *
+from load_graph_to_arangodb import *
+
+if __name__ == "__main__":
+    print("="*50)
+    print("ARANGODB IMPORT SCRIPT")
+    print("="*50)
+    
+    # 1. Connessione e Configurazione
+    db = setup_arangodb_connection(db_name)
+    root_name = saved_path.split("\\")[-1].split(".json")[0].replace("transomic_graph_", "").replace("_edges", "_e")
+    nodes_collection = f"{root_name}_nodes"
+    edges_collection = f"{root_name}_edges"
+    if db:
+        create_arangodb_collections(db,
+                                    nodes_collection=nodes_collection,
+                                    edges_collection=edges_collection)
+        
+        # 2. Importazione Dati
+        import_data_to_arangodb(db,
+                                graph_file=saved_path,
+                                nodes_collection=nodes_collection,
+                                edges_collection=edges_collection)
+
+        # 3. Verifica finale
+        print("\nFinal verification:")
+        get_collections_data(db)
+#%%
+import load_graph_to_arangodb
+import arangodb_utils
+reload(load_graph_to_arangodb)
+reload(arangodb_utils)
+from arangodb_utils import *
+from load_graph_to_arangodb import *
+if __name__ == "__main__":
+        # 4. Visualizza grafo esempio di query
+        query = 'PR_Q9H609'
+        subgraph = get_node_centric_graph(db, node_key=query,
+                                          node_collection=nodes_collection,
+                                          edge_collection=edges_collection)
+        # subgraph = get_node_centric_graph(db, filters={'label': 'TP53'}, edge_limit=100)
+        plot_subgraph(subgraph, layout='kamada_kawai', highlight_center=True, save_path=f'{query}_subgraph.png')
 
 #%%
 

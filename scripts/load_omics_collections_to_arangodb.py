@@ -1,7 +1,8 @@
 #%%
 
 """
-TCGA Omics Data Loader for ArangoDB - Version 3
+TCGA Omics Data Loader for ArangoDB 
+Version: 0.3.2
 
 This version consolidates index and sample data into unified collections:
 - GENE_EXPRESSION (contains both index and per-sample data)

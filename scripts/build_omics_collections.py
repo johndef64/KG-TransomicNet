@@ -2,9 +2,9 @@
 #!/usr/bin/env python3
 
 """
-step3_load_omics_v4.py - Sample-Centric Vector-Based TCGA Data Loading for ArangoDB
+step3_load_omics_v5.py - Sample-Centric Vector-Based TCGA Data Loading for ArangoDB
 
-Implementazione basata su architettura IRR (Information Representation and Reuse) v4:
+Implementazione basata su architettura IRR (Information Representation and Reuse) v5:
 - SAMPLE-CENTRIC STRATEGY: Un documento per campione (non per gene×sample)
 - VECTOR-BASED STORAGE: Vettori di espressione paralleli con indice gene condiviso
 - DRASTICA RIDUZIONE DOCUMENTI: da ~20M a ~1K documenti per coorte
@@ -15,9 +15,7 @@ Architettura:
 2. Quantitative Index Layer: EXPRESSION_INDEX, CNV_INDEX, METHYLATION_INDEX (mapping gene→posizione)
 3. Quantitative Vector Layer: GENE_EXPRESSION_SAMPLES, CNV_SAMPLES, METHYLATION_SAMPLES (vettori per sample)
 
-Versione: 4.1
-Data: 2025-12-10
-Autore: KG-Transomics Framework
+Versione: 0.5
 Riferimento: Strategie Sample-Centric per dati trans-omici scalabili
 """
 

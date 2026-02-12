@@ -1,4 +1,8 @@
+
 #%%
+"""
+Version 0.2 - Updated to handle new graph JSON format with 'edge' and 'neighbor' keys, added error handling and progress tracking for batch imports, and included a function to fix edges referencing nodes/Summary with actual ENST identifiers.
+"""
 from arango import ArangoClient
 import json
 import traceback
@@ -103,30 +107,32 @@ def setup_arangodb_connection(db_name):
         print(f"✗ Error setting up ArangoDB connection. Is ArangoDB running on {arangodb_hosts}? Error: {e}")
         return None
 
-def create_arangodb_collections(db_connection):
+def create_arangodb_collections(db_connection,
+                                nodes_collection='nodes',
+                                edges_collection='edges'):
     """Create nodes (vertex) and edges (edge) collections"""
     if db_connection is None: return
 
     try:
         # Rimuovi le collezioni esistenti
-        for collection_name in ['nodes', 'edges']:
+        for collection_name in [nodes_collection, edges_collection]:
             if db_connection.has_collection(collection_name):
                 db_connection.delete_collection(collection_name)
                 print(f"Deleted existing collection: {collection_name}")
         
         # Crea la collezione di vertici per i nodi
-        db_connection.create_collection('nodes')
+        db_connection.create_collection(nodes_collection)
         print("✓ Created nodes (vertex) collection")
         
         # Crea la collezione di archi per le relazioni
-        db_connection.create_collection('edges', edge=True)
+        db_connection.create_collection(edges_collection, edge=True)
         print("✓ Created edges (edge) collection")
         
         # Crea indici
         try:
-            db_connection.collection('nodes').add_index({'fields': ['label'], 'type': 'hash'})
-            db_connection.collection('nodes').add_index({'fields': ['entity_id'], 'type': 'hash'})
-            db_connection.collection('edges').add_index({'fields': ['relationship'], 'type': 'hash'})
+            db_connection.collection(nodes_collection).add_index({'fields': ['label'], 'type': 'hash'})
+            db_connection.collection(nodes_collection).add_index({'fields': ['entity_id'], 'type': 'hash'})
+            db_connection.collection(edges_collection).add_index({'fields': ['relationship'], 'type': 'hash'})
             print("✓ Created indexes for better query performance")
         except Exception as e:
             print(f"Warning: Could not create indexes: {e}")
@@ -138,31 +144,49 @@ def create_arangodb_collections(db_connection):
 
 # --- FUNZIONE DI IMPORTAZIONE DATI ---
 
-# you must implement this function that is missing correctly, the main gial i sto load nodes edges and their propertis correcly i aragnodb 
+# you must implement this function that is missing correctly, the main goal is to load nodes, edges, and their properties correctly into ArangoDB
 
-def import_data_to_arangodb(db_connection):
+def import_data_to_arangodb(db_connection,
+                            nodes_collection='nodes',
+                            edges_collection='edges',
+                            nodes_file=NODES_FILE,
+                            edges_file=EDGES_FILE,
+                            graph_file=None):
     """Load JSON files and import data into ArangoDB"""
     if db_connection is None:
         print("✗ No database connection available")
         return
     
     try:
-        
-        # Load nodes
-        print(f"\n📂 Loading nodes from {NODES_FILE}...")
-        with open(NODES_FILE, 'r', encoding='utf-8') as f:
-            nodes_data = json.load(f)
+        if not graph_file:
+            # Load nodes
+            print(f"\n📂 Loading nodes from {nodes_file}...")
+            with open(nodes_file, 'r', encoding='utf-8') as f:
+                nodes_data = json.load(f)
 
-        # Load edges
-        print(f"📂 Loading edges from {EDGES_FILE}...")
-        with open(EDGES_FILE, 'r', encoding='utf-8') as f:
-            edges_data = json.load(f)
+            # Load edges
+            print(f"📂 Loading edges from {edges_file}...")
+            with open(edges_file, 'r', encoding='utf-8') as f:
+                edges_data = json.load(f)
+            skipt_transform = False
+        else:
+            # load fron json graph file, noes and edge are two keys of the graph json
+            print(f"\n📂 Loading graph from {graph_file}...")
+            with open(graph_file, 'r', encoding='utf-8') as f:
+                graph_data = json.load(f)
+                nodes_data = graph_data.get('nodes', [])
+                edges_data = graph_data.get('edges', [])
+                # ogni entri in edhes_data ha due valori "edge" e "neighbor", edge contiene tutte le proprietà dell'arco, neighbor contiene tutte le proprietà del nodo vicino, ma noi dobbiamo importare solo edge come sigolo valore senza ket per ottenre un edge_data usabile
+                if edges_data and isinstance(edges_data, list) and isinstance(edges_data[0], dict) and 'edge' in edges_data[0]:
+                    print("⚠ Detected graph format with 'edge' and 'neighbor' keys. Extracting edge properties for import...")
+                    edges_data = [e.get('edge', {}) for e in edges_data]
+                skipt_transform = True
         
         print(f"✓ Loaded {len(nodes_data)} nodes and {len(edges_data)} edges from JSON files")
         
         # Get collections
-        nodes_collection = db_connection.collection('nodes')
-        edges_collection = db_connection.collection('edges')
+        nodes_collection = db_connection.collection(nodes_collection)
+        edges_collection = db_connection.collection(edges_collection)
 
           
         # Import nodes in batches
@@ -192,25 +216,26 @@ def import_data_to_arangodb(db_connection):
             batch = edges_data[i:i + BATCH_SIZE]
             
             # Transform edges to ArangoDB format while preserving ALL properties
-            transformed_batch = []
-            for edge in batch:
-                # Extract entity_id from URIs (last component after /)
-                source_key = edge['source_uri'].split('/')[-1].split('?t=')[-1]  # Handle query params
-                target_key = edge['target_uri'].split('/')[-1].split('?t=')[-1]
-
-                # Fix ENST identifiers if they are in the format Summary?t=ENST00000XXXXX
-    
+            if not skipt_transform:
+                transformed_batch = []
+                for edge in batch: 
+                    # Extract entity_id from URIs (last component after /)
+                    source_key = edge['source_uri'].split('/')[-1].split('?t=')[-1]  # Handle query params
+                    target_key = edge['target_uri'].split('/')[-1].split('?t=')[-1]
+                    
+                    # Create edge document with _from/_to and ALL original properties
+                    edge_doc = {
+                        '_key': edge['edge_id'],
+                        '_from': f"nodes/{source_key}",
+                        '_to': f"nodes/{target_key}",
+                        # Preserve ALL edge properties from the original JSON
+                        **{k: v for k, v in edge.items() if k != 'edge_id'}
+                    }
+                    transformed_batch.append(edge_doc)
+            else:
+                print("⚠ Skipping edge transformation as data appears to already be in ArangoDB format")
+                transformed_batch = batch
                 
-                # Create edge document with _from/_to and ALL original properties
-                edge_doc = {
-                    '_key': edge['edge_id'],
-                    '_from': f"nodes/{source_key}",
-                    '_to': f"nodes/{target_key}",
-                    # Preserve ALL edge properties from the original JSON
-                    **{k: v for k, v in edge.items() if k != 'edge_id'}
-                }
-                transformed_batch.append(edge_doc)
-            
             try:
                 result = edges_collection.insert_many(transformed_batch, overwrite=False, silent=True)
                 edges_imported += len(transformed_batch)
@@ -403,21 +428,21 @@ scrivi un funzoine, essenziale funzionale che opera questa correzione nella coll
 
 # %%
 # 4. Visualizza il grafo
-G = visualize_random_graph(
-    db, 
-    sample_size=200,  # Campiona 200 nodi per grafi grandi
-    layout='spring'   # Usa layout spring (altre opzioni: 'circular', 'kamada_kawai')
-)
-# %%
+# G = visualize_random_graph(
+#     db, 
+#     sample_size=200,  # Campiona 200 nodi per grafi grandi
+#     layout='spring'   # Usa layout spring (altre opzioni: 'circular', 'kamada_kawai')
+# )
+# # %%
 
-# 3. Crea il grafo
-graph = create_arango_graph(db, graph_name='PKT_graph')
+# # 3. Crea il grafo
+# graph = create_arango_graph(db, graph_name='PKT_graph')
 
-# open_arango_web_viewer(graph_name='PKT_graph', db_name='PKT_test10000')
+# # open_arango_web_viewer(graph_name='PKT_graph', db_name='PKT_test10000')
 
-G = visualize_arango_graph(db, graph_name='PKT_graph', 
-                           depth=10, 
-                           limit=500, output_dir='.')
+# G = visualize_arango_graph(db, graph_name='PKT_graph', 
+#                            depth=10, 
+#                            limit=500, output_dir='.')
 
 
 # %%

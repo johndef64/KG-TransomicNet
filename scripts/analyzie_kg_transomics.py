@@ -1,6 +1,7 @@
 #%%
 """
 Analyzer for transomic property-graph JSON files produced by build_transomic_network.py.
+Version: 0.1
 
 Functions:
 - load_graph(path): read a single graph JSON.
@@ -166,6 +167,7 @@ def analyze_graph_file(path: str, print_top: int = 0) -> Dict:
 # TCGA-GM-A2DD
 Case = "TCGA-BH-A18U"
 filename =f"transomic_graph_TCGA-BRCA_{Case}-01A.json"
+filename = "transomic_graph_TCGA-BH-A18U-01A_edges10000.json"
 # filename = "transomic_graph_TCGA-BH-A18U-01A_edgelimit-none.json"
 summary = analyze_graph_file(f"../transomic-networks\\{filename}", print_top=5)
 #%%

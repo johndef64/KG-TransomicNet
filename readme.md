@@ -44,7 +44,13 @@ Multi-omics measurements are represented as properties of knowledge graph nodes:
 
 ## Key Scripts
 
-- `kg_to_arangodb.py`: Converts PKT TSV tables to ArangoDB-compatible JSON format
+1. `scripts\build_property_graph.py`: Converts PKT TSV tables to ArangoDB-compatible JSON format
+2. `scripts\load_graph_to_arangodb.py`: Loads JSON graph data into ArangoDB
+3. `scripts\build_omics_collections.py`: Builds ArangoDB collections for multi-omics data
+4. `scripts\load_omics_collections_to_arangodb.py`: Integrates TCGA multi-omics data into the knowledge graph
+5. `scripts\build_kg_transomic.py`: Builds sample-specific trans-omic networks for a given TCGA sample
+6. `scripts\analyze_kg_transomics.py`: Analyzes and summarizes properties of the trans-omic subgraphs
+
 
 ## Methodology
 
