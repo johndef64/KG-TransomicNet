@@ -352,6 +352,40 @@ def search_nodes(db_connection, bioentity_type: str = None,
     """
     return list(db_connection.aql.execute(aql, bind_vars=bind_vars))
 
+def search_edges(db_connection, predicate_class_code: str = None, 
+                    predicate_label_contains: str = None,
+                    limit: int = 100) -> List[Dict]:
+        """
+        Search edges by various criteria.
+        
+        Args:
+            db_connection: ArangoDB database connection
+            predicate_class_code: Filter by predicate class code (e.g., "RO", "PR")
+            predicate_label_contains: Filter edges whose predicate label contains this substring
+            limit: Maximum number of edges to return
+        Returns:
+            List of matching edge documents
+        """
+        filters = []
+        bind_vars = {"limit": limit}
+        if predicate_class_code:
+            filters.append("e.predicate_class_code == @predicateClassCode")
+            bind_vars["predicateClassCode"] = predicate_class_code
+        if predicate_label_contains:
+            filters.append("CONTAINS(LOWER(e.predicate_label), LOWER(@predicateLabelContains))")
+            bind_vars["predicateLabelContains"] = predicate_label_contains
+        filter_clause = "FILTER " + " AND ".join(filters) if filters else ""
+        aql = f"""
+        FOR e IN edges
+            {filter_clause}
+            LIMIT @limit
+            RETURN e
+        """
+        return list(db_connection.aql.execute(aql, bind_vars=bind_vars))
+
+
+
+
 
 """ [KG COLLECTION SAMPLES]
 
@@ -1469,11 +1503,12 @@ def get_edges_for_node_keys(db_connection,
                             node_keys: List[str],
                             direction: str = "any",
                             predicate_filter: Optional[List[str]] = None,
-                            limit: int = 5000) -> List[Dict[str, Any]]:
+                            limit: Optional[int] = None) -> List[Dict[str, Any]]:
     """
     Retrieve edges touching any of the provided node keys.
     direction: any|outbound|inbound controls edge orientation filter.
     predicate_filter: optional list of predicate_label values to keep.
+    limit: optional hard cap (AQL LIMIT, no ranking). None = no cap.
     """
     if not node_keys:
         return []
@@ -1488,11 +1523,13 @@ def get_edges_for_node_keys(db_connection,
         FILTER @predicates == null OR e.predicate_label IN @predicates
     """
 
+    limit_clause = "LIMIT @limit" if limit is not None else ""
+
     aql = f"""
     FOR nk IN @nodeKeys
         FOR v, e IN 1..1 {dir_clause} CONCAT("nodes/", nk) edges
             {predicate_clause}
-            LIMIT @limit
+            {limit_clause}
             RETURN {{
                 edge: e,
                 neighbor: v
@@ -1502,8 +1539,9 @@ def get_edges_for_node_keys(db_connection,
     bind_vars = {
         "nodeKeys": node_keys,
         "predicates": predicate_filter,
-        "limit": limit
     }
+    if limit is not None:
+        bind_vars["limit"] = limit
     return list(db_connection.aql.execute(aql, bind_vars=bind_vars))
 
 
@@ -1513,21 +1551,38 @@ def build_transomic_property_graph(db_connection,
                                    omic_types: Optional[List[str]] = None,
                                    value_field_override: Optional[Dict[str, str]] = None,
                                    value_abs_threshold: Optional[float] = None,
+                                   value_threshold_per_omic: Optional[Dict[str, float]] = None,
                                    top_n: Optional[int] = None,
                                    include_edges: bool = True,
                                    predicate_filter: Optional[List[str]] = None,
-                                   edge_limit: int = 5000) -> Dict[str, Any]:
+                                   edge_limit: Optional[int] = None) -> Dict[str, Any]:
     """
     Build a per-sample property graph JSON combining omic vectors and KG edges.
 
     - Nodes: one per feature with omic_type, identifier, value, optional kg info.
     - Edges: KG edges among mapped nodes (if include_edges=True).
+
+    Filtering strategy (biologically-driven):
+    - value_threshold_per_omic: per-omic |value| threshold (recommended). Takes
+      precedence over value_abs_threshold for omics present in the dict.
+      Scales differ across omics (TPM, log2FC, beta-value, copy number, etc.),
+      so a single global threshold is rarely appropriate.
+    - value_abs_threshold: global fallback threshold used only for omics not in
+      value_threshold_per_omic.
+    - predicate_filter: keep only KG edges with predicate_label in this list.
+      Use to retain biologically-meaningful relations (e.g. interactions,
+      regulation, transcription) and drop purely ontological edges.
+    - edge_limit: hard cap on KG edges (AQL LIMIT, no ranking). Set high (or
+      None-like via large int) when you want a dense topology and rely on
+      predicate_filter + value thresholds to contain the graph size.
     """
     omic_types = omic_types or list(OMIC_CONFIG.keys())
     value_field_override = value_field_override or {}
+    value_threshold_per_omic = value_threshold_per_omic or {}
 
     feature_tables = []
     for omic in omic_types:
+        threshold = value_threshold_per_omic.get(omic, value_abs_threshold)
         table = get_sample_feature_table(
             db_connection,
             cohort=cohort,
@@ -1535,7 +1590,7 @@ def build_transomic_property_graph(db_connection,
             omic_type=omic,
             value_field=value_field_override.get(omic),
             id_priority=DEFAULT_ID_PRIORITY.get(omic),
-            value_abs_threshold=value_abs_threshold,
+            value_abs_threshold=threshold,
             top_n=top_n
         )
         if table.get("features"):
@@ -1562,7 +1617,6 @@ def build_transomic_property_graph(db_connection,
     i nodi protein vanno mappato sui nodi proteina del grafo, .
 
     Altrimenti si perde molta specificità e si rischia di mappare tutto su pochi nodi gene molto connessi, perdendo la capacità di distinguere le diverse entità biologiche rappresentate dalle feature omiche.
-
     
 
     nodo gene:
@@ -1578,13 +1632,14 @@ def build_transomic_property_graph(db_connection,
         "class_code": "PR",
     """
 
-
+    # Prima risolviamo in batch tutte le richieste di mapping verso il KG per evitare query ripetute
     kg_hits = {}
     for cc, ids in lookup_reqs.items():
         resolved = resolve_nodes_by_class_and_id(db_connection, class_code=cc, entity_ids=list(ids))
         for eid, hit in resolved.items():
             kg_hits[(cc, eid)] = hit
-
+            
+    # Ora costruiamo i nodi con le info KG quando disponibili
     for table, feat, class_code, entity_id in staged:
         node_entry = {
             "id": feat.get("identifier"),
@@ -1622,6 +1677,8 @@ def build_transomic_property_graph(db_connection,
             "omic_types": omic_types,
             "predicate_filter": predicate_filter,
             "value_abs_threshold": value_abs_threshold,
+            "value_threshold_per_omic": value_threshold_per_omic,
+            "edge_limit": edge_limit,
             "top_n": top_n
         },
         "nodes": nodes,

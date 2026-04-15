@@ -1,6 +1,7 @@
 #%%
-import os
+import os, sys
 from arango import ArangoClient
+from arango.http import DefaultHTTPClient
 import json
 import traceback
 
@@ -15,13 +16,18 @@ EDGES_FILE = f"{data_dir}edges.json"
 BATCH_SIZE = 1000 # Dimensione del batch per le operazioni di inserimento
 OMICS_PATH = "../data/omics/"
 
+# ── FIX #1: custom HTTP client con timeout esteso ──────────────────────────
+class TimeoutHTTPClient(DefaultHTTPClient):
+    REQUEST_TIMEOUT = 600  # 10 minuti
+
 
 # --- FUNZIONI DI BASE DI ARANGODB ---
 
 def setup_arangodb_connection(db_name = db_name):
     """Setup ArangoDB connection and create database if needed"""
+    print(f"🔌 Setting up ArangoDB connection to {arangodb_hosts}...")
     try:
-        client = ArangoClient(hosts=arangodb_hosts)
+        client = ArangoClient(hosts=arangodb_hosts, http_client=TimeoutHTTPClient())
         
         # Connetti prima al database di sistema
         sys_db = client.db('_system', username=arangodb_user, password=arangodb_password)
@@ -399,6 +405,7 @@ def list_dumps(dumps_dir="./dumps/"):
         traceback.print_exc()
         return []
 
+# --- Create collections ---
 
 
 
