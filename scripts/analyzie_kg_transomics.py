@@ -9,10 +9,10 @@ Functions:
 - top_features_by_abs(nodes, omic_type, n): extract top-N |value| features for an omic.
 
 CLI:
-	python step5-analyzie-kg-transomics_v0.py --folder ../temp_dir --sample TCGA-XX-YYYY
+	python analyzie-kg-transomics_v0.py --folder ../temp_dir --sample TCGA-XX-YYYY
 
 Notebook:
-	from step5-analyzie-kg-transomics_v0 import load_graph, analyze_transomic_graph
+	from analyzie-kg-transomics_v0 import load_graph, analyze_transomic_graph
 	g = load_graph("../temp_dir/transomic_graph_TCGA-BRCA_TCGA-XX-YYYY.json")
 	summary = analyze_transomic_graph(g)
 """
@@ -164,14 +164,14 @@ def analyze_graph_file(path: str, print_top: int = 0) -> Dict:
 
 	return summary
 
-# TCGA-GM-A2DD
-Case = "TCGA-BH-A18U"
-filename =f"transomic_graph_TCGA-BRCA_{Case}-01A.json"
-filename = "transomic_graph_TCGA-BH-A18U-01A_edges10000.json"
-# filename = "transomic_graph_TCGA-BH-A18U-01A_edgelimit-none.json"
-summary = analyze_graph_file(f"../transomic-networks\\{filename}", print_top=5)
-#%%
-summary["predicate_counts"]
+# # TCGA-GM-A2DD
+# Case = "TCGA-BH-A18U"
+# filename =f"transomic_graph_TCGA-BRCA_{Case}-01A.json"
+# filename = "transomic_graph_TCGA-BH-A18U-01A_edges10000.json"
+# # filename = "transomic_graph_TCGA-BH-A18U-01A_edgelimit-none.json"
+# summary = analyze_graph_file(f"../transomic-networks\\{filename}", print_top=5)
+# #%%
+# summary["predicate_counts"]
 """
 Predicates (no edge limit):
   - transcribed from: 176705
@@ -260,9 +260,21 @@ def main():
 	print("Omic counts:", summary["omic_counts"])
 	print("Predicates (top 5):", Counter(summary["predicate_counts"]).most_common(5))
 
-
+#%%
 if __name__ == "__main__":
 	# Skip argparse when running inside notebooks/VS Code interactive to avoid errors.
 	if "ipykernel" not in sys.modules:
 		main()
+	else:
+		# TCGA-GM-A2DD
+		Case = "TCGA-BH-A18U"
+		filename =f"transomic_graph_TCGA-BRCA_{Case}-01A.json"
+		filename = "transomic_graph_TCGA-BH-A18U-01A_edges10000.json"
+		# filename = "transomic_graph_TCGA-BH-A18U-01A_edgelimit-none.json"
+		summary = analyze_graph_file(f"../transomic-networks\\{filename}", print_top=5)
 
+		summary["predicate_counts"]
+
+#%%
+
+#%%
