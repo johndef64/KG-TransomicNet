@@ -818,10 +818,9 @@ def print_statistical_tests(results_by_group: Dict[str, pd.DataFrame],
         if len(vals) < 5:
             continue
         u_stat, p_val = stats.mannwhitneyu(vals, random_vals, alternative="greater")
-        # Effect size r = Z / sqrt(N)
+        # Rank-biserial correlation as effect size (derived directly from U)
         n1, n2 = len(vals), len(random_vals)
-        z = stats.norm.ppf(1 - p_val)
-        effect_r = z / np.sqrt(n1 + n2) if (n1 + n2) > 0 else 0
+        effect_r = 2 * u_stat / (n1 * n2) - 1  # ranges from -1 to +1
 
         med = vals.median()
         sig = "***" if p_val < 0.001 else "**" if p_val < 0.01 else "*" if p_val < 0.05 else ""

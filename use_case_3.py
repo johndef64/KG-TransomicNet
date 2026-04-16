@@ -19,3 +19,29 @@
 - **Radar/spider chart**: profilo multi-omico medio per il gene set, per ogni layer
 - **Sankey diagram**: fenotipo → geni → pathway → layer omici, con spessore proporzionale alla forza del segnale quantitativo
 """
+
+
+"""
+Source di codice:
+
+codice che costruisce la rete trasomica per paziente:
+scripts/build_transomic_network.py
+
+analyzer:
+scripts/analyzie_kg_transomics.py
+
+utils:
+scripts/omics_query_utils.py
+scripts/query_utils.py
+scripts/kg_transomics_aql_query.md
+
+
+Folder:
+- transomic-networks: contiene i JSON dei grafi trasomici per ogni paziente
+
+Referece:
+- for the structure of the script UC3, you can refer to use_case_1.py, which has a similar structure but focuses on a different biological question. 
+
+
+Studia source di codice e scrivi codice per realizzare UC3, con visualizzazioni.
+"""
