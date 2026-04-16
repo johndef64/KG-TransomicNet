@@ -39,5 +39,10 @@ scripts/query_utils.py
 scripts/kg_transomics_aql_query.md
 
 
+Folder:
+- transomic-networks: contiene i JSON dei grafi trasomici per ogni paziente
 
+
+
+Studia source di codice e scrivi codice per realizzare UC1, con visualizzazioni.
 """

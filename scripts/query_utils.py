@@ -1503,12 +1503,17 @@ def get_edges_for_node_keys(db_connection,
                             node_keys: List[str],
                             direction: str = "any",
                             predicate_filter: Optional[List[str]] = None,
-                            limit: Optional[int] = None) -> List[Dict[str, Any]]:
+                            limit: Optional[int] = None,
+                            induced: bool = True) -> List[Dict[str, Any]]:
     """
-    Retrieve edges touching any of the provided node keys.
+    Retrieve edges touching the provided node keys.
+
     direction: any|outbound|inbound controls edge orientation filter.
     predicate_filter: optional list of predicate_label values to keep.
     limit: optional hard cap (AQL LIMIT, no ranking). None = no cap.
+    induced: if True (default), return only edges whose BOTH endpoints are in
+        node_keys (induced subgraph). If False, return any edge touching at
+        least one node in node_keys (star expansion — brings in neighbors).
     """
     if not node_keys:
         return []
@@ -1525,6 +1530,9 @@ def get_edges_for_node_keys(db_connection,
 
     limit_clause = "LIMIT @limit" if limit is not None else ""
 
+    # Use graph traversal (index-backed) for all cases. Induced subgraph
+    # filtering is done in Python after retrieval to avoid a full collection
+    # scan, which times out on large edge sets.
     aql = f"""
     FOR nk IN @nodeKeys
         FOR v, e IN 1..1 {dir_clause} CONCAT("nodes/", nk) edges
@@ -1542,7 +1550,28 @@ def get_edges_for_node_keys(db_connection,
     }
     if limit is not None:
         bind_vars["limit"] = limit
-    return list(db_connection.aql.execute(aql, bind_vars=bind_vars))
+
+    results = list(db_connection.aql.execute(aql, bind_vars=bind_vars))
+
+    if not induced:
+        return results
+
+    # Induced subgraph: keep only edges where the neighbor is also in node_keys.
+    # Dedup by edge _id since each edge is visited from both endpoints with ANY.
+    key_set = set(node_keys)
+    seen_edges: set = set()
+    induced_results = []
+    for item in results:
+        neighbor = item.get("neighbor") or {}
+        neighbor_key = neighbor.get("_key")
+        if neighbor_key not in key_set:
+            continue
+        edge_id = item["edge"].get("_id")
+        if edge_id in seen_edges:
+            continue
+        seen_edges.add(edge_id)
+        induced_results.append(item)
+    return induced_results
 
 
 def build_transomic_property_graph(db_connection,
@@ -1555,7 +1584,8 @@ def build_transomic_property_graph(db_connection,
                                    top_n: Optional[int] = None,
                                    include_edges: bool = True,
                                    predicate_filter: Optional[List[str]] = None,
-                                   edge_limit: Optional[int] = None) -> Dict[str, Any]:
+                                   edge_limit: Optional[int] = None,
+                                   induced_subgraph: bool = False) -> Dict[str, Any]:
     """
     Build a per-sample property graph JSON combining omic vectors and KG edges.
 
@@ -1667,7 +1697,8 @@ def build_transomic_property_graph(db_connection,
             node_keys=unique_keys,
             direction="any",
             predicate_filter=predicate_filter,
-            limit=edge_limit
+            limit=edge_limit,
+            induced=induced_subgraph
         )
 
     return {
@@ -1679,6 +1710,7 @@ def build_transomic_property_graph(db_connection,
             "value_abs_threshold": value_abs_threshold,
             "value_threshold_per_omic": value_threshold_per_omic,
             "edge_limit": edge_limit,
+            "induced_subgraph": induced_subgraph,
             "top_n": top_n
         },
         "nodes": nodes,
