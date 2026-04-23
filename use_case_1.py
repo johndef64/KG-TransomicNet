@@ -639,13 +639,13 @@ def plot_hop_distance_scatter(hop_df: pd.DataFrame,
 
     # Scatter with jitter
     jitter = np.random.default_rng(42).uniform(-0.2, 0.2, size=len(df))
-    colors = {1: "#2ca02c", 2: "#ff7f0e", 3: "#d62728"}
+    colors = {"1": "#2ca02c", "2": "#ff7f0e", "3": "#d62728"}
     for hop in sorted(df["hop_distance"].unique()):
         subset = df[df["hop_distance"] == hop]
         j = jitter[:len(subset)]
         ax1.scatter(subset["hop_distance"] + j[:len(subset)],
                     subset[corr_column],
-                    alpha=0.3, s=20, color=colors.get(hop, "grey"),
+                    alpha=0.3, s=20, color=colors.get(str(hop), "grey"),
                     label=f"Hop {hop} (n={len(subset)})")
 
     # Trend line: median per hop
@@ -661,8 +661,10 @@ def plot_hop_distance_scatter(hop_df: pd.DataFrame,
     ax1.set_xticks(sorted(df["hop_distance"].unique()))
 
     # Boxplot
-    sns.boxplot(data=df, x="hop_distance", y=corr_column, ax=ax2,
-                palette=colors, showfliers=False)
+    df_box = df.copy()
+    df_box["hop_distance"] = df_box["hop_distance"].astype(str)
+    sns.boxplot(data=df_box, x="hop_distance", y=corr_column, hue="hop_distance",
+                palette=colors, showfliers=False, legend=False, ax=ax2)
     ax2.set_xlabel("Hop Distance", fontsize=12)
     ax2.set_ylabel("")
     ax2.set_title("Distribution by Hop", fontsize=12)
@@ -789,6 +791,245 @@ def plot_summary_heatmap(summary_stats: pd.DataFrame, output_path: str = None):
         fig.savefig(output_path, dpi=200, bbox_inches="tight")
         print(f"  Saved: {output_path}")
     plt.show()
+    return fig
+
+
+def plot_publication_figure(results_by_group: Dict[str, pd.DataFrame],
+                             summary_stats: pd.DataFrame,
+                             hop_df: Optional[pd.DataFrame] = None,
+                             output_path: Optional[str] = None):
+    """
+    Composite multi-panel figure in Bioinformatics journal style.
+
+    Panel A (top, full width): mRNA-mRNA correlation boxplot by KG predicate vs random.
+    Panel B (bottom left):     Heatmap — median correlation per predicate x omic layer.
+    Panel C (bottom right):    Scatter + boxplot of hop distance vs mRNA correlation.
+
+    Layout follows OUP/Bioinformatics conventions: serif-free sans, ~7 pt labels,
+    panel letters in bold at top-left, tight whitespace, vector-friendly strokes.
+    """
+    # Journal-style rcParams (scoped with rc_context so we don't touch globals)
+    rc = {
+        "font.family": "sans-serif",
+        "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
+        "font.size": 8,
+        "axes.labelsize": 8,
+        "axes.titlesize": 9,
+        "axes.titleweight": "bold",
+        "xtick.labelsize": 7,
+        "ytick.labelsize": 7,
+        "legend.fontsize": 7,
+        "axes.linewidth": 0.7,
+        "xtick.major.width": 0.6,
+        "ytick.major.width": 0.6,
+        "xtick.major.size": 2.5,
+        "ytick.major.size": 2.5,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "pdf.fonttype": 42,
+        "ps.fonttype": 42,
+    }
+
+    with plt.rc_context(rc):
+        # Two-column Bioinformatics figure ~ 180 mm wide; height scaled for 3 panels
+        fig = plt.figure(figsize=(7.2, 7.6))
+        gs = fig.add_gridspec(
+            nrows=2, ncols=2,
+            height_ratios=[1.0, 1.05],
+            width_ratios=[1.0, 1.25],
+            hspace=0.55, wspace=0.35,
+            left=0.08, right=0.97, top=0.95, bottom=0.08,
+        )
+        ax_a = fig.add_subplot(gs[0, :])
+        ax_b = fig.add_subplot(gs[1, 0])
+        ax_c = fig.add_subplot(gs[1, 1])
+
+        # ------------------------------------------------------------------
+        # Panel A — mRNA-mRNA correlation boxplot
+        # ------------------------------------------------------------------
+        plot_rows = []
+        for group_name, df in results_by_group.items():
+            vals = df["corr_mrna"].dropna()
+            for v in vals:
+                plot_rows.append({"Relation": group_name, "Correlation": v})
+        plot_df = pd.DataFrame(plot_rows)
+
+        short_names = {
+            "random": "Random",
+            "genetically interacts with": "Genetic\ninteraction",
+            "molecularly interacts with": "Molecular\ninteraction",
+            "co-pathway (has participant)": "Co-pathway",
+            "co-disease": "Co-disease",
+        }
+
+        if not plot_df.empty:
+            medians = plot_df.groupby("Relation")["Correlation"].median()
+            if "random" in medians.index:
+                others = medians.drop("random").sort_values(ascending=False).index.tolist()
+                order = ["random"] + others
+            else:
+                order = medians.sort_values(ascending=False).index.tolist()
+
+            palette = {}
+            cmap = plt.cm.YlGn
+            n_bio = max(len(order) - 1, 1)
+            bio_idx = 0
+            for name in order:
+                if name == "random":
+                    palette[name] = "#B8B8B8"
+                else:
+                    palette[name] = cmap(0.45 + 0.45 * bio_idx / max(n_bio - 1, 1))
+                    bio_idx += 1
+
+            sns.boxplot(
+                data=plot_df, x="Relation", y="Correlation", order=order,
+                palette=palette, ax=ax_a, showfliers=False, width=0.55,
+                linewidth=0.7,
+                medianprops={"color": "black", "linewidth": 1.1},
+            )
+            sns.stripplot(
+                data=plot_df, x="Relation", y="Correlation", order=order,
+                color="black", alpha=0.12, size=1.3, ax=ax_a, jitter=0.22,
+            )
+
+            ax_a.axhline(0, color="grey", linestyle="--", linewidth=0.6, alpha=0.6)
+            ax_a.set_xlabel("")
+            ax_a.set_ylabel("mRNA–mRNA correlation (Pearson r)")
+            ax_a.set_xticklabels(
+                [short_names.get(n, n) for n in order],
+                rotation=0, ha="center",
+            )
+
+            # n and median annotations BELOW the axis to avoid overlap
+            ymin, ymax = ax_a.get_ylim()
+            span = ymax - ymin
+            ax_a.set_ylim(ymin - span * 0.18, ymax + span * 0.05)
+            for i, name in enumerate(order):
+                subset = plot_df[plot_df["Relation"] == name]["Correlation"]
+                med = subset.median()
+                ax_a.text(
+                    i, ymin - span * 0.10,
+                    f"n={len(subset)}\nmed={med:.3f}",
+                    ha="center", va="top", fontsize=6.5, color="#444",
+                )
+
+        ax_a.set_title("mRNA–mRNA coherence stratified by KG semantic relation",
+                        loc="center", pad=6)
+
+        # ------------------------------------------------------------------
+        # Panel B — heatmap of median correlations across omic layers
+        # ------------------------------------------------------------------
+        metrics = ["corr_mrna", "corr_protein", "corr_cross_ab"]
+        metric_labels = ["mRNA–mRNA", "Protein–Protein", "mRNA–Protein"]
+        hm_rows = []
+        for _, row in summary_stats.iterrows():
+            for m, ml in zip(metrics, metric_labels):
+                col = f"median_{m}"
+                if col in row:
+                    hm_rows.append({
+                        "Relation": short_names.get(row["predicate_group"], row["predicate_group"]).replace("\n", " "),
+                        "Metric": ml,
+                        "Median r": row[col],
+                    })
+
+        if hm_rows:
+            hm_df = pd.DataFrame(hm_rows).pivot(index="Relation", columns="Metric", values="Median r")
+            hm_df = hm_df[[c for c in metric_labels if c in hm_df.columns]]
+            if "mRNA–mRNA" in hm_df.columns:
+                hm_df = hm_df.sort_values("mRNA–mRNA", ascending=False)
+
+            sns.heatmap(
+                hm_df, annot=True, fmt=".3f",
+                cmap="RdBu_r", center=0, vmin=-0.25, vmax=0.25,
+                linewidths=0.6, linecolor="white",
+                cbar_kws={"label": "Median Pearson r", "shrink": 0.75, "pad": 0.02},
+                annot_kws={"fontsize": 7},
+                ax=ax_b,
+            )
+            ax_b.set_xlabel("")
+            ax_b.set_ylabel("")
+            ax_b.tick_params(axis="x", rotation=25)
+            ax_b.tick_params(axis="y", rotation=0)
+            for tick in ax_b.get_xticklabels():
+                tick.set_ha("right")
+
+        ax_b.set_title("Multi-layer median correlation", loc="center", pad=6)
+
+        # ------------------------------------------------------------------
+        # Panel C — hop-distance scatter with median trend + inset-style box
+        # ------------------------------------------------------------------
+        if hop_df is not None and not hop_df.empty:
+            df_c = hop_df.dropna(subset=["corr_mrna"]).copy()
+        else:
+            df_c = pd.DataFrame()
+
+        if not df_c.empty:
+            hop_colors = {1: "#2ca02c", 2: "#ff7f0e", 3: "#d62728"}
+            rng = np.random.default_rng(42)
+            for hop in sorted(df_c["hop_distance"].unique()):
+                sub = df_c[df_c["hop_distance"] == hop]
+                jitter = rng.uniform(-0.18, 0.18, size=len(sub))
+                ax_c.scatter(
+                    sub["hop_distance"].values + jitter,
+                    sub["corr_mrna"].values,
+                    s=9, alpha=0.35,
+                    color=hop_colors.get(int(hop), "grey"),
+                    edgecolors="none",
+                    label=f"Hop {int(hop)} (n={len(sub)})",
+                )
+
+            medians = df_c.groupby("hop_distance")["corr_mrna"].median()
+            ax_c.plot(
+                medians.index.values, medians.values,
+                color="black", marker="o", markersize=5, linewidth=1.3,
+                zorder=5, label="Median",
+            )
+
+            # Overlay narrow boxplots at each hop position for distribution summary
+            for hop in sorted(df_c["hop_distance"].unique()):
+                sub = df_c[df_c["hop_distance"] == hop]["corr_mrna"].values
+                bp = ax_c.boxplot(
+                    sub, positions=[hop], widths=0.35, showfliers=False,
+                    patch_artist=True, zorder=4,
+                    boxprops=dict(facecolor="white", edgecolor="black", linewidth=0.7, alpha=0.85),
+                    medianprops=dict(color="black", linewidth=0.9),
+                    whiskerprops=dict(color="black", linewidth=0.6),
+                    capprops=dict(color="black", linewidth=0.6),
+                )
+
+            ax_c.axhline(0, color="grey", linestyle="--", linewidth=0.6, alpha=0.6)
+            ax_c.set_xticks(sorted(df_c["hop_distance"].unique()))
+            ax_c.set_xlabel("KG semantic distance (hops)")
+            ax_c.set_ylabel("mRNA–mRNA correlation (Pearson r)")
+            ax_c.legend(loc="upper right", frameon=False, handletextpad=0.4,
+                        borderpad=0.2, labelspacing=0.3)
+        else:
+            ax_c.text(0.5, 0.5, "No hop-distance data", ha="center", va="center",
+                       transform=ax_c.transAxes, color="#888")
+            ax_c.set_xticks([])
+            ax_c.set_yticks([])
+
+        ax_c.set_title("Topological gradient: hop distance vs coherence",
+                        loc="center", pad=6)
+
+        # ------------------------------------------------------------------
+        # Panel letters (A, B, C)
+        # ------------------------------------------------------------------
+        for ax, letter in [(ax_a, "A"), (ax_b, "B"), (ax_c, "C")]:
+            ax.text(
+                -0.02, 1.04, letter,
+                transform=ax.transAxes,
+                fontsize=12, fontweight="bold", va="bottom", ha="right",
+            )
+
+        if output_path:
+            fig.savefig(output_path, dpi=600, bbox_inches="tight")
+            # Also save a vector copy for camera-ready submission
+            pdf_path = os.path.splitext(output_path)[0] + ".pdf"
+            fig.savefig(pdf_path, bbox_inches="tight")
+            print(f"  Saved: {output_path}")
+            print(f"  Saved: {pdf_path}")
+        plt.show()
     return fig
 
 
@@ -996,6 +1237,7 @@ def run_uc1(db_name: str = DB_NAME, cohort: str = COHORT):
     print("\n[6/6] Computing hop-distance analysis...")
     # Pick seed genes: high-degree genes in our results
     seed_candidates = list(all_connected_genes)[:30]
+    hop_df = pd.DataFrame()
     if seed_candidates:
         hop_df = compute_hop_distance_correlations(
             db, cohort, seed_genes=seed_candidates[:15],
@@ -1010,6 +1252,12 @@ def run_uc1(db_name: str = DB_NAME, cohort: str = COHORT):
                 output_path=os.path.join(OUTPUT_DIR, "uc1_scatter_hop_distance.png")
             )
 
+    # 6. Composite publication figure (A: boxplot, B: heatmap, C: hop-distance)
+    plot_publication_figure(
+        results_by_group, summary_df, hop_df=hop_df if not hop_df.empty else None,
+        output_path=os.path.join(OUTPUT_DIR, "uc1_figure_main.png"),
+    )
+
     print("\n" + "=" * 70)
     print("  UC1 analysis complete!")
     print(f"  Results saved to: {OUTPUT_DIR}")
@@ -1018,10 +1266,111 @@ def run_uc1(db_name: str = DB_NAME, cohort: str = COHORT):
     return results_by_group, summary_df
 
 
+def run_uc1_plots_only():
+    """
+    Skip the analysis and regenerate all plots from saved CSV files in OUTPUT_DIR.
+    Requires: uc1_correlation_results.csv, uc1_summary_stats.csv, uc1_hop_distance_results.csv
+    """
+    print("=" * 70)
+    print("  UC1: Regenerating plots from saved results (skip-analysis mode)")
+    print("=" * 70)
+
+    corr_path = os.path.join(OUTPUT_DIR, "uc1_correlation_results.csv")
+    summary_path = os.path.join(OUTPUT_DIR, "uc1_summary_stats.csv")
+    hop_path = os.path.join(OUTPUT_DIR, "uc1_hop_distance_results.csv")
+
+    missing = [p for p in [corr_path, summary_path] if not os.path.exists(p)]
+    if missing:
+        print(f"  ERROR: Missing required files:\n  " + "\n  ".join(missing))
+        print("  Run without --skip-analysis first to generate the data.")
+        return
+
+    print(f"  Loading: {corr_path}")
+    all_results = pd.read_csv(corr_path)
+    results_by_group = {g: df for g, df in all_results.groupby("predicate_group")}
+
+    print(f"  Loading: {summary_path}")
+    summary_df = pd.read_csv(summary_path)
+
+    print(f"  Groups found: {list(results_by_group.keys())}")
+
+    print("\n  Generating visualizations...")
+
+    plot_correlation_boxplots(
+        results_by_group, corr_column="corr_mrna",
+        title="UC1: mRNA-mRNA Correlation by KG Semantic Relation (TCGA-BRCA)",
+        output_path=os.path.join(OUTPUT_DIR, "uc1_boxplot_mrna.png")
+    )
+
+    plot_correlation_boxplots(
+        results_by_group, corr_column="corr_protein",
+        title="UC1: Protein-Protein Correlation by KG Semantic Relation (TCGA-BRCA)",
+        output_path=os.path.join(OUTPUT_DIR, "uc1_boxplot_protein.png")
+    )
+
+    plot_correlation_boxplots(
+        results_by_group, corr_column="corr_cross_ab",
+        title="UC1: Cross-Layer mRNA-Protein Correlation by KG Semantic Relation (TCGA-BRCA)",
+        output_path=os.path.join(OUTPUT_DIR, "uc1_boxplot_cross_layer.png")
+    )
+
+    plot_summary_heatmap(
+        summary_df,
+        output_path=os.path.join(OUTPUT_DIR, "uc1_heatmap_summary.png")
+    )
+
+    # Network subgraph for best predicate group
+    non_random = summary_df[summary_df["predicate_group"] != "random"]
+    if not non_random.empty and "median_corr_mrna" in non_random.columns:
+        best_idx = non_random["median_corr_mrna"].idxmax()
+        best_name = non_random.loc[best_idx, "predicate_group"]
+        if best_name in results_by_group:
+            plot_network_subgraph(
+                results_by_group[best_name],
+                predicate_name=best_name,
+                corr_column="corr_mrna",
+                top_n=80,
+                output_path=os.path.join(OUTPUT_DIR, f"uc1_network_{best_name.replace(' ', '_')}.png")
+            )
+
+    # Hop-distance scatter
+    hop_df = pd.DataFrame()
+    if os.path.exists(hop_path):
+        print(f"  Loading: {hop_path}")
+        hop_df = pd.read_csv(hop_path)
+        plot_hop_distance_scatter(
+            hop_df, corr_column="corr_mrna",
+            title="UC1: KG Semantic Distance vs mRNA Correlation (TCGA-BRCA)",
+            output_path=os.path.join(OUTPUT_DIR, "uc1_scatter_hop_distance.png")
+        )
+    else:
+        print(f"  WARNING: {hop_path} not found, skipping hop-distance plot.")
+
+    # Composite publication figure (A: boxplot, B: heatmap, C: hop-distance)
+    plot_publication_figure(
+        results_by_group, summary_df,
+        hop_df=hop_df if not hop_df.empty else None,
+        output_path=os.path.join(OUTPUT_DIR, "uc1_figure_main.png"),
+    )
+
+    print("\n" + "=" * 70)
+    print("  UC1 plots regenerated!")
+    print(f"  Output: {OUTPUT_DIR}")
+    print("=" * 70)
+
+
 #%% Entry point
 if __name__ == "__main__":
+    skip_analysis = "--skip-analysis" in sys.argv
+
     if "ipykernel" not in sys.modules:
-        run_uc1()
+        if skip_analysis:
+            run_uc1_plots_only()
+        else:
+            run_uc1()
     else:
-        # Interactive: run with defaults
-        results_by_group, summary_df = run_uc1()
+        # Interactive: set skip_analysis = True to regenerate plots only
+        if skip_analysis:
+            run_uc1_plots_only()
+        else:
+            results_by_group, summary_df = run_uc1()

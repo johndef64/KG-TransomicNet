@@ -817,6 +817,282 @@ def plot_layer_heatmap(corr_df: pd.DataFrame, gene_info: Dict[str, str],
         return fig
 
 
+def plot_publication_figure(corr_df: pd.DataFrame,
+                             go_enrichment_df: pd.DataFrame,
+                             pred_enrichment_df: pd.DataFrame,
+                             output_path: str = None):
+    """
+    Composite publication figure for UC2 (Bioinformatics journal style).
+
+    Layout (double-column, ~180 mm wide):
+        ┌──────────────────────────────┬─────────────────────────────┐
+        │                              │  B  GO Term Enrichment      │
+        │  A  Cross-layer scatter      │                             │
+        │                              ├─────────────────────────────┤
+        │                              │  C  KG Predicate Enrichment │
+        └──────────────────────────────┴─────────────────────────────┘
+
+    Panel A (left, ~60%): scatter CNV-mRNA vs mRNA-Protein (main result).
+    Panel B (top-right):  top GO term enrichment (discordant vs concordant).
+    Panel C (bottom-right): top KG predicate enrichment.
+    """
+    df = corr_df.dropna(subset=["corr_cnv_mrna", "corr_mrna_prot"]).copy()
+    if df.empty:
+        print("  No data for publication figure, skipping.")
+        return
+
+    # Bioinformatics-style typography: sans-serif, small sizes, thin lines
+    rc_backup = {k: plt.rcParams[k] for k in [
+        "font.family", "font.size", "axes.labelsize", "axes.titlesize",
+        "xtick.labelsize", "ytick.labelsize", "legend.fontsize",
+        "axes.linewidth", "xtick.major.width", "ytick.major.width",
+    ]}
+    plt.rcParams.update({
+        "font.family": "sans-serif",
+        "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
+        "font.size": 8,
+        "axes.labelsize": 8,
+        "axes.titlesize": 9,
+        "xtick.labelsize": 7,
+        "ytick.labelsize": 7,
+        "legend.fontsize": 6.5,
+        "axes.linewidth": 0.6,
+        "xtick.major.width": 0.6,
+        "ytick.major.width": 0.6,
+    })
+
+    # Figure size: ~180 mm wide (double column) x ~135 mm tall
+    fig = plt.figure(figsize=(7.2, 5.4))
+    gs = fig.add_gridspec(
+        2, 2,
+        width_ratios=[1.45, 1.0],
+        height_ratios=[1.0, 1.0],
+        wspace=0.55, hspace=0.75,
+        left=0.07, right=0.985, top=0.90, bottom=0.09,
+    )
+    ax_a = fig.add_subplot(gs[:, 0])
+    ax_b = fig.add_subplot(gs[0, 1])
+    ax_c = fig.add_subplot(gs[1, 1])
+
+    # =========================================================================
+    # Panel A — Scatter cross-layer
+    # =========================================================================
+    xlim = (-0.6, 1.0)
+    ylim = (-0.6, 1.0)
+
+    cat_colors = {
+        "concordant": "#2ca02c",
+        "transcriptional_discordant": "#ff7f0e",
+        "post_transcriptional_discordant": "#d62728",
+        "mixed_discordant": "#9467bd",
+        "intermediate": "#BBBBBB",
+    }
+    cat_labels = {
+        "concordant": "Concordant",
+        "transcriptional_discordant": "Transcr. discordant",
+        "post_transcriptional_discordant": "Post-transcr. discordant",
+        "mixed_discordant": "Mixed discordant",
+        "intermediate": "Intermediate",
+    }
+
+    ax_a.fill_between([CORR_THRESHOLD_HIGH, xlim[1]], CORR_THRESHOLD_HIGH, ylim[1],
+                      alpha=0.05, color="green", linewidth=0)
+    ax_a.fill_between([CORR_THRESHOLD_HIGH, xlim[1]], ylim[0], CORR_THRESHOLD_LOW,
+                      alpha=0.05, color="red", linewidth=0)
+    ax_a.fill_between([xlim[0], CORR_THRESHOLD_LOW], CORR_THRESHOLD_HIGH, ylim[1],
+                      alpha=0.05, color="orange", linewidth=0)
+    ax_a.fill_between([xlim[0], CORR_THRESHOLD_LOW], ylim[0], CORR_THRESHOLD_LOW,
+                      alpha=0.05, color="purple", linewidth=0)
+
+    ax_a.axhline(y=CORR_THRESHOLD_HIGH, color="grey", linestyle="--", linewidth=0.5, alpha=0.5)
+    ax_a.axvline(x=CORR_THRESHOLD_HIGH, color="grey", linestyle="--", linewidth=0.5, alpha=0.5)
+    ax_a.axhline(y=CORR_THRESHOLD_LOW, color="grey", linestyle=":", linewidth=0.4, alpha=0.4)
+    ax_a.axvline(x=CORR_THRESHOLD_LOW, color="grey", linestyle=":", linewidth=0.4, alpha=0.4)
+    ax_a.plot(xlim, ylim, "k--", alpha=0.2, linewidth=0.5)
+
+    for cat, color in cat_colors.items():
+        subset = df[df["category"] == cat]
+        if subset.empty:
+            continue
+        ax_a.scatter(subset["corr_cnv_mrna"], subset["corr_mrna_prot"],
+                     c=color, label=f"{cat_labels[cat]} (n={len(subset)})",
+                     s=14, alpha=0.75, edgecolors="white", linewidths=0.25)
+
+    # Label extreme discordant genes — alternate offsets to avoid overlap
+    labelled = set()
+    annotations = []  # (x, y, label)
+    for cat in ["post_transcriptional_discordant", "transcriptional_discordant", "mixed_discordant"]:
+        subset = df[df["category"] == cat].copy()
+        if subset.empty:
+            continue
+        subset["dist"] = abs(subset["corr_cnv_mrna"] - subset["corr_mrna_prot"])
+        top = subset.nlargest(2, "dist")
+        for _, row in top.iterrows():
+            label = row.get("gene_symbol", row["entrez_id"])
+            if not isinstance(label, str) or not label or label in labelled:
+                continue
+            labelled.add(label)
+            annotations.append((row["corr_cnv_mrna"], row["corr_mrna_prot"], label))
+
+    # Place labels with offsets that alternate to reduce collisions
+    offsets = [(5, 4), (5, -8), (-5, 5), (-5, -8), (6, 9), (6, -10)]
+    for i, (x, y, label) in enumerate(annotations):
+        dx, dy = offsets[i % len(offsets)]
+        ha = "left" if dx >= 0 else "right"
+        ax_a.annotate(label, (x, y),
+                      fontsize=6, alpha=0.95, ha=ha, fontstyle="italic",
+                      xytext=(dx, dy), textcoords="offset points",
+                      arrowprops=dict(arrowstyle="-", lw=0.3, color="grey", alpha=0.5))
+
+    ax_a.set_xlabel("Pearson r (CNV → mRNA)")
+    ax_a.set_ylabel("Pearson r (mRNA → Protein)")
+    ax_a.set_xlim(xlim)
+    ax_a.set_ylim(ylim)
+    ax_a.set_xticks(np.arange(-0.6, 1.01, 0.2))
+    ax_a.set_yticks(np.arange(-0.6, 1.01, 0.2))
+    ax_a.tick_params(direction="out", length=3)
+    for spine in ["top", "right"]:
+        ax_a.spines[spine].set_visible(False)
+
+    # Quadrant annotations — corner-anchored to avoid covering data
+    ax_a.text(0.985, 0.985, "Concordant", transform=ax_a.transAxes,
+              fontsize=6.5, color="#2ca02c", alpha=0.85, ha="right",
+              va="top", fontweight="bold")
+    ax_a.text(0.015, 0.985, "Transcr.\ndiscordance", transform=ax_a.transAxes,
+              fontsize=6.5, color="#ff7f0e", alpha=0.85, ha="left",
+              va="top", fontweight="bold")
+    ax_a.text(0.985, 0.015, "Post-transcr.\ndiscordance", transform=ax_a.transAxes,
+              fontsize=6.5, color="#d62728", alpha=0.85, ha="right",
+              va="bottom", fontweight="bold")
+    ax_a.text(0.015, 0.015, "Mixed\ndiscordance", transform=ax_a.transAxes,
+              fontsize=6.5, color="#9467bd", alpha=0.85, ha="left",
+              va="bottom", fontweight="bold")
+
+    # Legend below the panel, horizontal, no overlap with data
+    ax_a.legend(loc="upper center", bbox_to_anchor=(0.5, -0.10),
+                fontsize=6, framealpha=0.0, ncol=3,
+                handletextpad=0.3, borderpad=0.2,
+                columnspacing=0.9, labelspacing=0.3)
+
+    # =========================================================================
+    # Helper for B/C — horizontal bar with frequency + significance markers
+    # =========================================================================
+    def _enrichment_panel(ax, enrichment_df, top_n, ylabel_prefix,
+                          max_term_chars=42, show_legend=False):
+        if enrichment_df is None or enrichment_df.empty:
+            ax.text(0.5, 0.5, "No enrichment data",
+                    ha="center", va="center", transform=ax.transAxes,
+                    fontsize=7, color="grey")
+            ax.set_xticks([]); ax.set_yticks([])
+            return None
+
+        df_e = enrichment_df.copy()
+        # Pick significant first, otherwise top by p-value
+        sig = df_e[df_e["fisher_pval"] < 0.05]
+        if len(sig) >= 3:
+            sel = sig.nsmallest(top_n, "fisher_pval")
+        else:
+            sel = df_e.nsmallest(top_n, "fisher_pval")
+
+        # Order top -> bottom by significance
+        sel = sel.sort_values("fisher_pval", ascending=True).head(top_n)
+
+        terms = sel["term"].astype(str).tolist()
+        terms_short = [t if len(t) <= max_term_chars else t[:max_term_chars - 1] + "…"
+                       for t in terms]
+        freq_disc = sel["freq_discordant"].values
+        freq_conc = sel["freq_concordant"].values
+        pvals = sel["fisher_pval"].values
+
+        y = np.arange(len(sel))
+        h = 0.38
+        # Two grouped horizontal bars per term
+        b_disc = ax.barh(y - h/2, freq_disc, height=h, color="#d62728",
+                         alpha=0.85, edgecolor="white", linewidth=0.3,
+                         label="Discordant")
+        b_conc = ax.barh(y + h/2, freq_conc, height=h, color="#2ca02c",
+                         alpha=0.85, edgecolor="white", linewidth=0.3,
+                         label="Concordant")
+
+        # Significance markers at end of discordant bar
+        xmax = max(max(freq_disc) if len(freq_disc) else 0,
+                   max(freq_conc) if len(freq_conc) else 0)
+        for yi, p, fd in zip(y, pvals, freq_disc):
+            if p < 0.001:
+                star = "***"
+            elif p < 0.01:
+                star = "**"
+            elif p < 0.05:
+                star = "*"
+            else:
+                star = ""
+            if star:
+                ax.text(fd + xmax * 0.015, yi - h/2, star,
+                        va="center", ha="left", fontsize=7,
+                        fontweight="bold", color="#333333")
+
+        ax.set_yticks(y)
+        ax.set_yticklabels(terms_short, fontsize=6.5)
+        ax.invert_yaxis()
+        ax.set_xlabel("Gene frequency", fontsize=7.5)
+        ax.set_xlim(0, xmax * 1.18 if xmax > 0 else 1)
+        ax.tick_params(direction="out", length=2.5)
+        for spine in ["top", "right"]:
+            ax.spines[spine].set_visible(False)
+        if show_legend:
+            ax.legend(loc="lower right", fontsize=6, framealpha=0.92,
+                      handletextpad=0.4, borderpad=0.3, labelspacing=0.25,
+                      frameon=True, edgecolor="lightgrey")
+        return (b_disc, b_conc)
+
+    # =========================================================================
+    # Panel B — GO term enrichment
+    # =========================================================================
+    bars_b = _enrichment_panel(ax_b, go_enrichment_df, top_n=6,
+                                ylabel_prefix="GO", max_term_chars=42,
+                                show_legend=False)
+    ax_b.set_title("Top GO biological processes", fontsize=8, pad=6)
+
+    # =========================================================================
+    # Panel C — KG predicate enrichment (carries shared legend for B+C)
+    # =========================================================================
+    bars_c = _enrichment_panel(ax_c, pred_enrichment_df, top_n=6,
+                                ylabel_prefix="Predicate", max_term_chars=42,
+                                show_legend=True)
+    ax_c.set_title("Top KG predicates", fontsize=8, pad=6)
+
+    # =========================================================================
+    # Panel labels (A, B, C) — Bioinformatics style: bold, top-left corner
+    # =========================================================================
+    ax_a.text(-0.05, 1.02, "A", transform=ax_a.transAxes,
+              fontsize=12, fontweight="bold", va="bottom", ha="left")
+    ax_b.text(-0.32, 1.08, "B", transform=ax_b.transAxes,
+              fontsize=12, fontweight="bold", va="bottom", ha="left")
+    ax_c.text(-0.32, 1.08, "C", transform=ax_c.transAxes,
+              fontsize=12, fontweight="bold", va="bottom", ha="left")
+
+    # Global suptitle — concise, above panel labels
+    fig.suptitle(
+        "Cross-layer discordance and KG-driven semantic enrichment in TCGA-BRCA",
+        fontsize=9, fontweight="bold", y=0.998,
+    )
+
+    if output_path:
+        # Save both PNG (300 dpi) and PDF (vector) for publication
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        pdf_path = os.path.splitext(output_path)[0] + ".pdf"
+        try:
+            fig.savefig(pdf_path, bbox_inches="tight")
+            print(f"  Saved: {output_path}")
+            print(f"  Saved: {pdf_path}")
+        except Exception as exc:
+            print(f"  Saved: {output_path}  (PDF export skipped: {exc})")
+
+    plt.show()
+    plt.rcParams.update(rc_backup)
+    return fig
+
+
 def plot_enrichment_bars(enrichment_df: pd.DataFrame,
                           term_type_label: str = "GO Term",
                           top_n: int = 20,
@@ -1108,6 +1384,16 @@ def run_uc2(db_name: str = DB_NAME, cohort: str = COHORT):
         except Exception as exc:
             print(f"  ERROR in {term_label} enrichment plot: {exc}")
 
+    # 5. Publication multi-panel figure (Bioinformatics-style)
+    try:
+        print(f"\n  Building publication multi-panel figure (A|B,C)...")
+        plot_publication_figure(
+            corr_df, go_enrichment, pred_enrichment,
+            output_path=os.path.join(OUTPUT_DIR, "uc2_figure_publication.png"),
+        )
+    except Exception as exc:
+        print(f"  ERROR in publication figure: {exc}")
+
     print("\n" + "=" * 70)
     print("  UC2 analysis complete!")
     print(f"  Results saved to: {OUTPUT_DIR}")
@@ -1116,9 +1402,120 @@ def run_uc2(db_name: str = DB_NAME, cohort: str = COHORT):
     return corr_df, summary_df, disc_enrichment, conc_enrichment
 
 
+def run_uc2_plots_only():
+    """
+    Skip the analysis and regenerate all plots from saved CSV files in OUTPUT_DIR.
+    Requires: uc2_correlation_results.csv, uc2_go_enrichment.csv,
+              uc2_pathway_enrichment.csv, uc2_predicate_enrichment.csv
+
+    NOTE: The network plot (uc2_network_discordant.png) requires a live ArangoDB
+    connection to query KG edges and cannot be regenerated in skip-analysis mode.
+    All other plots are regenerated from CSVs only.
+    """
+    print("=" * 70)
+    print("  UC2: Regenerating plots from saved results (skip-analysis mode)")
+    print("=" * 70)
+
+    corr_path = os.path.join(OUTPUT_DIR, "uc2_correlation_results.csv")
+    go_path = os.path.join(OUTPUT_DIR, "uc2_go_enrichment.csv")
+    pw_path = os.path.join(OUTPUT_DIR, "uc2_pathway_enrichment.csv")
+    pred_path = os.path.join(OUTPUT_DIR, "uc2_predicate_enrichment.csv")
+
+    missing = [p for p in [corr_path] if not os.path.exists(p)]
+    if missing:
+        print(f"  ERROR: Missing required files:\n  " + "\n  ".join(missing))
+        print("  Run without --skip-analysis first to generate the data.")
+        return
+
+    print(f"  Loading: {corr_path}")
+    corr_df = pd.read_csv(corr_path)
+
+    # gene_info: entrez_id -> gene_symbol (from the saved CSV)
+    gene_info = {}
+    if "gene_symbol" in corr_df.columns:
+        gene_info = dict(zip(corr_df["entrez_id"].astype(str),
+                             corr_df["gene_symbol"].fillna("").astype(str)))
+
+    print(f"  Genes loaded: {len(corr_df)}")
+    if "category" in corr_df.columns:
+        print(f"  Categories: {corr_df['category'].value_counts().to_dict()}")
+
+    print("\n  Generating visualizations...")
+
+    # 1. Scatter: CNV-mRNA vs mRNA-Protein
+    try:
+        plot_discordance_scatter(
+            corr_df,
+            output_path=os.path.join(OUTPUT_DIR, "uc2_scatter_discordance.png")
+        )
+    except Exception as exc:
+        print(f"  ERROR in scatter plot: {exc}")
+
+    # 2. Network: SKIPPED — requires live ArangoDB connection
+    print("\n  NOTE: Network plot skipped (requires live ArangoDB connection).")
+    print("        Existing uc2_network_discordant.png is preserved.")
+
+    # 3. Heatmap: genes x layers by category
+    try:
+        plot_layer_heatmap(
+            corr_df, gene_info, top_n=60,
+            output_path=os.path.join(OUTPUT_DIR, "uc2_heatmap_layers.png")
+        )
+    except Exception as exc:
+        print(f"  ERROR in heatmap: {exc}")
+
+    # 4. Enrichment bar charts (from saved CSVs)
+    enrichment_files = [
+        (go_path,   "GO Term",       20, "uc2_enrichment_go.png"),
+        (pred_path, "KG Predicate",  15, "uc2_enrichment_predicates.png"),
+        (pw_path,   "Pathway",       15, "uc2_enrichment_pathways.png"),
+    ]
+    loaded_enrichment = {}
+    for fpath, term_label, top_n_terms, fname in enrichment_files:
+        if not os.path.exists(fpath):
+            print(f"  WARNING: {fpath} not found, skipping {term_label} enrichment plot.")
+            continue
+        try:
+            df = pd.read_csv(fpath)
+            loaded_enrichment[term_label] = df
+            plot_enrichment_bars(
+                df, term_type_label=term_label,
+                top_n=top_n_terms,
+                output_path=os.path.join(OUTPUT_DIR, fname)
+            )
+        except Exception as exc:
+            print(f"  ERROR in {term_label} enrichment plot: {exc}")
+
+    # 5. Publication multi-panel figure (Bioinformatics-style)
+    try:
+        print(f"\n  Building publication multi-panel figure (A|B,C)...")
+        plot_publication_figure(
+            corr_df,
+            loaded_enrichment.get("GO Term", pd.DataFrame()),
+            loaded_enrichment.get("KG Predicate", pd.DataFrame()),
+            output_path=os.path.join(OUTPUT_DIR, "uc2_figure_publication.png"),
+        )
+    except Exception as exc:
+        print(f"  ERROR in publication figure: {exc}")
+
+    print("\n" + "=" * 70)
+    print("  UC2 plots regenerated!")
+    print(f"  Output: {OUTPUT_DIR}")
+    print("=" * 70)
+
+
 #%% Entry point
 if __name__ == "__main__":
+    skip_analysis = "--skip-analysis" in sys.argv
+
     if "ipykernel" not in sys.modules:
-        run_uc2()
+        if skip_analysis:
+            run_uc2_plots_only()
+        else:
+            run_uc2()
     else:
-        corr_df, summary_df, disc_enrichment, conc_enrichment = run_uc2()
+        # Interactive: set skip_analysis = True to regenerate plots only
+        if skip_analysis:
+            run_uc2_plots_only()
+        else:
+            corr_df, summary_df, disc_enrichment, conc_enrichment = run_uc2()

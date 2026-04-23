@@ -727,37 +727,78 @@ def get_gene_expression_matrix(db_connection, cohort: str,
     
     if not positions:
         return {"samples": [], "genes": [], "matrix": []}
-    
-    pos_list = list(positions.values())
+
     gene_list = list(positions.keys())
     config = OMIC_CONFIG["gene_expression"]
     value_field = f"values_{value_type}"
-    
-    aql = f"""
-    FOR s IN {config['collection']}
-        FILTER s.data_type == @vectorDataType
-        FILTER s.cohort == @cohort
-        FILTER @sampleIds == null OR s._key IN @sampleIds
-        FILTER s.{value_field} != null
-        RETURN {{
-            sample_id: s._key,
-            values: (FOR p IN @positions RETURN s.{value_field}[p])
-        }}
-    """
-    
-    bind_vars = {
-        "vectorDataType": config['vector_data_type'],
-        "cohort": cohort,
-        "positions": pos_list,
-        "sampleIds": sample_ids
-    }
-    
-    results = list(db_connection.aql.execute(aql, bind_vars=bind_vars))
-    
+
+    # Split into chunks to avoid query timeouts with large gene lists
+    CHUNK_SIZE = 100
+    gene_chunks = [gene_list[i:i + CHUNK_SIZE] for i in range(0, len(gene_list), CHUNK_SIZE)]
+
+    # First chunk: fetch sample_ids + values
+    sample_order = None
+    col_chunks = []
+
+    for chunk in gene_chunks:
+        pos_chunk = [positions[g] for g in chunk]
+
+        aql = f"""
+        FOR s IN {config['collection']}
+            FILTER s.data_type == @vectorDataType
+            FILTER s.cohort == @cohort
+            FILTER @sampleIds == null OR s._key IN @sampleIds
+            FILTER s.{value_field} != null
+            RETURN {{
+                sample_id: s._key,
+                values: (FOR p IN @positions RETURN s.{value_field}[p])
+            }}
+        """
+
+        bind_vars = {
+            "vectorDataType": config['vector_data_type'],
+            "cohort": cohort,
+            "positions": pos_chunk,
+            "sampleIds": sample_ids
+        }
+
+        results = list(db_connection.aql.execute(aql, bind_vars=bind_vars))
+
+        if not results:
+            continue
+
+        if sample_order is None:
+            sample_order = [r["sample_id"] for r in results]
+            # Build index for subsequent chunks
+            sample_index = {sid: i for i, sid in enumerate(sample_order)}
+
+        # Align rows to sample_order
+        aligned = [[None] * len(chunk) for _ in sample_order]
+        for r in results:
+            idx = sample_index.get(r["sample_id"])
+            if idx is not None:
+                aligned[idx] = r["values"]
+
+        col_chunks.append((chunk, aligned))
+
+    if sample_order is None:
+        return {"samples": [], "genes": [], "matrix": []}
+
+    # Merge column chunks into final matrix
+    n_samples = len(sample_order)
+    full_matrix = []
+    merged_genes = []
+    for chunk_genes, chunk_matrix in col_chunks:
+        merged_genes.extend(chunk_genes)
+        for i in range(n_samples):
+            if len(full_matrix) <= i:
+                full_matrix.append([])
+            full_matrix[i].extend(chunk_matrix[i])
+
     return {
-        "samples": [r["sample_id"] for r in results],
-        "genes": gene_list,
-        "matrix": [r["values"] for r in results]
+        "samples": sample_order,
+        "genes": merged_genes,
+        "matrix": full_matrix
     }
 
 
