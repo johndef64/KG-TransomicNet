@@ -481,7 +481,8 @@ def plot_semantic_subgraph(traversal_result: Dict,
                            mean_expression: Optional[pd.Series] = None,
                            title: str = "UC3: Phenotype-Anchored Semantic Subgraph",
                            output_path: str = None,
-                           max_nodes: int = 120):
+                           max_nodes: int = 120,
+                           layout: str = "spring"):
     """
     Network visualization of the semantic subgraph:
     phenotype -> genes -> proteins -> GO terms
@@ -544,81 +545,513 @@ def plot_semantic_subgraph(traversal_result: Dict,
         print("  No nodes to plot for semantic subgraph, skipping.")
         return
 
-    fig, ax = plt.subplots(figsize=(18, 14))
-
-    # Layout
-    pos = nx.spring_layout(G, seed=42, k=2.5 / np.sqrt(max(len(G.nodes()), 1)),
-                           iterations=80)
-
-    # Node colors by type
+    # ── Type colours ──────────────────────────────────────────────────────
     type_colors = {
         "phenotype": "#E74C3C",
-        "gene": "#3498DB",
-        "protein": "#2ECC71",
-        "disease": "#F39C12",
-        "pathway": "#9B59B6",
+        "gene":      "#3498DB",
+        "protein":   "#2ECC71",
+        "disease":   "#F39C12",
+        "pathway":   "#9B59B6",
     }
     node_types = nx.get_node_attributes(G, "node_type")
-    node_colors = [type_colors.get(node_types.get(n, "gene"), "#CCCCCC")
-                   for n in G.nodes()]
 
-    # Node sizes: phenotype large, genes medium, others small
+    # ── Layout: spring (default) or concentric circular ──────────────────
+    pos: Dict = {}
+    use_rings = (layout == "circular")
+
+    if use_rings:
+        # Concentric-ring layout: phenotype centre, one ring per type.
+        ring_order = ["disease", "pathway", "gene", "protein"]
+        ring_radius = {"disease": 1.00, "pathway": 1.45,
+                       "gene": 2.05, "protein": 2.60}
+        degrees_full = dict(G.degree())
+        seed_keys = [n for n, t in node_types.items() if t == "phenotype"]
+        for sk in seed_keys:
+            pos[sk] = np.array([0.0, 0.0])
+        for nt in ring_order:
+            members = [n for n, t in node_types.items() if t == nt]
+            if not members:
+                continue
+            members.sort(key=lambda n: -degrees_full.get(n, 0))
+            r = ring_radius[nt]
+            n_m = len(members)
+            phase = {"disease": 0.0, "pathway": np.pi / n_m,
+                     "gene": 0.0, "protein": np.pi / n_m}.get(nt, 0.0)
+            for i, n in enumerate(members):
+                theta = 2 * np.pi * i / n_m + phase
+                pos[n] = np.array([r * np.cos(theta), r * np.sin(theta)])
+    else:
+        # Spring (force-directed) layout with a shell-based initialisation
+        # (phenotype → disease → pathway/protein → gene). Pinning only the
+        # phenotype leaves all other nodes to drift toward the centre, which
+        # collapses low-degree leaves into a hairball. We instead pin every
+        # node to its shell position and run a short spring relaxation
+        # *within* that constraint by applying a weak perturbation, giving
+        # a spread-out layout that still reveals structure.
+        degrees_full = dict(G.degree())
+        shells = {
+            "phenotype": [],
+            "disease":   [],
+            "pathway":   [],
+            "protein":   [],
+            "gene":      [],
+        }
+        for n, t in node_types.items():
+            shells.setdefault(t, []).append(n)
+        # Sort each shell by degree so high-degree nodes sit adjacent
+        for t in shells:
+            shells[t].sort(key=lambda n: -degrees_full.get(n, 0))
+
+        # Concentric layers from centre outward:
+        # phenotype → disease → pathway → protein → gene.
+        # Each shell radius is chosen so its circumference accommodates its
+        # nodes with a minimum arc-length per node (no label collapse).
+        n_dis = max(len(shells.get("disease", [])), 1)
+        n_path = max(len(shells.get("pathway", [])), 1)
+        n_prot = max(len(shells.get("protein", [])), 1)
+        n_gene = max(len(shells.get("gene", [])), 1)
+
+        min_arc = 0.55  # min spacing per node along ring
+        def _radius(n_nodes, floor):
+            return max(floor, n_nodes * min_arc / (2 * np.pi))
+
+        r_dis = _radius(n_dis, 2.0)
+        r_path = max(_radius(n_path, 3.4), r_dis + 1.4)
+        r_prot = max(_radius(n_prot, 5.0), r_path + 1.6)
+        r_gene = max(_radius(n_gene, 7.0), r_prot + 1.8)
+
+        # Slight ellipse (rx > ry) for rectangular canvas
+        ar = 0.82  # ry / rx
+        shell_r = {
+            "phenotype": (0.0, 0.0),
+            "disease":   (r_dis, r_dis * ar),
+            "pathway":   (r_path, r_path * ar),
+            "protein":   (r_prot, r_prot * ar),
+            "gene":      (r_gene, r_gene * ar),
+        }
+        # Build deterministic shell initial positions
+        rng = np.random.default_rng(42)
+        pos_init: Dict = {}
+        for t, members in shells.items():
+            if not members:
+                continue
+            rx, ry = shell_r[t]
+            if rx == 0 and ry == 0:
+                for m in members:
+                    pos_init[m] = np.array([0.0, 0.0])
+                continue
+            n_m = len(members)
+            phase = rng.uniform(0, 2 * np.pi)
+            # Add small per-node jitter so the spring relax has something to work on
+            for i, m in enumerate(members):
+                theta = 2 * np.pi * i / n_m + phase
+                jitter = rng.normal(0, 0.04, size=2)
+                pos_init[m] = np.array([
+                    rx * np.cos(theta) + jitter[0],
+                    ry * np.sin(theta) + jitter[1],
+                ])
+
+        # Pin ALL nodes to their shell init so the concentric ordering
+        # (phenotype → disease → pathway → protein → gene) is preserved.
+        # A tiny spring pass only resolves residual overlaps without moving
+        # nodes off their ring.
+        fixed_keys = list(G.nodes())
+        n_nodes = max(len(G.nodes()), 1)
+        k_val = 4.0 / np.sqrt(n_nodes)
+        pos = nx.spring_layout(
+            G,
+            seed=42,
+            k=k_val,
+            iterations=5,
+            pos=pos_init,
+            fixed=fixed_keys,
+        )
+        # NO post-rescale: rescaling to a fixed box squashes the gene ring back
+        # into a narrow ellipse and re-collapses labels. Keep native shell scale.
+
+    # ── Figure (rectangular, supplementary-sized) ────────────────────────
+    fig, ax = plt.subplots(figsize=(26, 16))
+
+    # ── Node sizes ────────────────────────────────────────────────────────
     node_sizes = []
     for n in G.nodes():
         nt = node_types.get(n, "gene")
         if nt == "phenotype":
-            node_sizes.append(800)
+            node_sizes.append(1800)
         elif nt == "gene":
-            node_sizes.append(200)
+            node_sizes.append(380)
+        elif nt == "disease":
+            node_sizes.append(320)
         else:
-            node_sizes.append(120)
+            node_sizes.append(260)
 
-    # If we have expression data, modulate gene node intensity
+    # ── Node colors (gene intensity modulated by expression) ─────────────
+    node_colors = [type_colors.get(node_types.get(n, "gene"), "#CCCCCC")
+                   for n in G.nodes()]
+    expr_norm = None
+    expr_cmap = plt.cm.Blues
     if mean_expression is not None:
         mean_exprs = nx.get_node_attributes(G, "mean_expr")
-        valid_exprs = [v for v in mean_exprs.values() if v != 0]
+        valid_exprs = [v for v in mean_exprs.values() if v and v > 0]
         if valid_exprs:
             vmin, vmax = np.percentile(valid_exprs, [5, 95])
-            norm = Normalize(vmin=max(vmin, 0.01), vmax=max(vmax, 1))
+            expr_norm = Normalize(vmin=max(vmin, 0.01), vmax=max(vmax, 1))
             for i, n in enumerate(G.nodes()):
                 if node_types.get(n) == "gene" and mean_exprs.get(n, 0) > 0:
-                    intensity = norm(mean_exprs[n])
-                    node_colors[i] = plt.cm.Blues(0.3 + 0.7 * intensity)
+                    intensity = expr_norm(mean_exprs[n])
+                    node_colors[i] = expr_cmap(0.30 + 0.65 * intensity)
 
-    # Draw
-    nx.draw_networkx_edges(G, pos, ax=ax, edge_color="#CCCCCC",
-                           alpha=0.4, arrows=True, arrowsize=8,
-                           connectionstyle="arc3,rad=0.1")
+    # ── Edges ─────────────────────────────────────────────────────────────
+    nx.draw_networkx_edges(G, pos, ax=ax, edge_color="#7F8C8D",
+                           alpha=0.55, arrows=False, width=1.6)
+
+    # ── Nodes ─────────────────────────────────────────────────────────────
     nx.draw_networkx_nodes(G, pos, ax=ax, node_color=node_colors,
-                           node_size=node_sizes, alpha=0.85,
-                           edgecolors="white", linewidths=0.5)
+                           node_size=node_sizes, alpha=0.92,
+                           edgecolors="white", linewidths=0.7)
 
-    # Labels for high-degree or important nodes
-    degrees = dict(G.degree())
-    degree_thresh = np.percentile(list(degrees.values()), 60) if degrees else 0
-    labels_dict = {}
+    # ── Labels: all non-gene nodes + all gene nodes (periphery has room) ─
     node_labels = nx.get_node_attributes(G, "label")
+    # Place labels slightly outside each node along the radial direction so
+    # they don't overlap the node disc. Phenotype label goes on top of the
+    # centre node.
     for n in G.nodes():
         nt = node_types.get(n, "")
-        if nt == "phenotype" or degrees.get(n, 0) >= degree_thresh:
-            labels_dict[n] = node_labels.get(n, n)[:20]
-    nx.draw_networkx_labels(G, pos, labels_dict, font_size=7,
-                            font_weight="bold", ax=ax)
+        lbl = node_labels.get(n, n)
+        if not lbl:
+            continue
+        lbl = str(lbl)[:26]
+        if nt == "phenotype":
+            ax.text(pos[n][0], pos[n][1], lbl,
+                    ha="center", va="center",
+                    fontsize=10, fontweight="bold",
+                    color="white", zorder=6)
+            continue
+        # Radial offset outward
+        x, y = pos[n]
+        r = np.hypot(x, y)
+        if r < 1e-6:
+            dx, dy = 0.0, 0.08
+        else:
+            offset = 0.14
+            dx, dy = x / r * offset, y / r * offset
+        ha = "left" if x > 0.05 else ("right" if x < -0.05 else "center")
+        va = "bottom" if y > 0.05 else ("top" if y < -0.05 else "center")
+        fontsize = 7.5 if nt == "gene" else 8.0
+        fontweight = "normal" if nt == "gene" else "bold"
+        ax.text(x + dx, y + dy, lbl, ha=ha, va=va,
+                fontsize=fontsize, fontweight=fontweight,
+                color="#2C3E50", zorder=5)
 
-    # Legend
+    # ── Ring annotations (only meaningful for the concentric layout) ────
+    if use_rings:
+        for nt in ring_order:
+            r = ring_radius[nt]
+            if any(node_types.get(n) == nt for n in G.nodes()):
+                ax.text(0, -r - 0.11, nt.capitalize() + " ring",
+                        ha="center", va="top", fontsize=8,
+                        color="#7F8C8D", style="italic", zorder=1)
+
+    # ── Legend: node types (categorical) ─────────────────────────────────
     legend_handles = [mpatches.Patch(color=c, label=t.capitalize())
-                      for t, c in type_colors.items()]
-    ax.legend(handles=legend_handles, loc="upper left", fontsize=9,
-              framealpha=0.8)
+                      for t, c in type_colors.items()
+                      if any(node_types.get(n) == t for n in G.nodes())]
+    leg1 = ax.legend(handles=legend_handles, loc="upper left",
+                     fontsize=10, framealpha=0.9, title="Node type",
+                     title_fontsize=10)
+    leg1.get_title().set_fontweight("bold")
+    ax.add_artist(leg1)
 
-    ax.set_title(title, fontsize=14, fontweight="bold")
+    # ── Colorbar: gene expression gradient (Blues) — only if meaningful ─
+    if expr_norm is not None:
+        # Build a ScalarMappable matching the actual gene-color mapping.
+        # Genes use expr_cmap(0.30 + 0.65 * norm), so the effective colormap
+        # is a truncated slice of Blues.
+        from matplotlib.colors import LinearSegmentedColormap
+        trunc = LinearSegmentedColormap.from_list(
+            "genes_blues_trunc",
+            expr_cmap(np.linspace(0.30, 0.95, 256)),
+        )
+        sm = plt.cm.ScalarMappable(cmap=trunc, norm=expr_norm)
+        sm.set_array([])
+        cax = fig.add_axes([0.86, 0.15, 0.018, 0.22])  # [left, bottom, w, h]
+        cb = fig.colorbar(sm, cax=cax)
+        cb.set_label("Gene node colour:\nmean expression (TPM)",
+                     fontsize=9, fontweight="bold")
+        cb.ax.tick_params(labelsize=8)
+        # Mark genes with mean_expr=0 as "no data" in caption
+        cax.text(0.5, -0.08, "grey/base blue = no expr. data",
+                 transform=cax.transAxes, ha="center", va="top",
+                 fontsize=7, color="#7F8C8D")
+
+    ax.set_title(title, fontsize=16, fontweight="bold", pad=12)
+    if use_rings:
+        ax.set_xlim(-3.1, 3.1)
+        ax.set_ylim(-3.1, 3.1)
+        ax.set_aspect("equal")
+    else:
+        # Rectangular layout: fit spring-relaxed positions with small padding
+        xs_all = np.array([p[0] for p in pos.values()])
+        ys_all = np.array([p[1] for p in pos.values()])
+        pad_x = (np.ptp(xs_all) * 0.12) if len(xs_all) else 0.5
+        pad_y = (np.ptp(ys_all) * 0.15) if len(ys_all) else 0.5
+        ax.set_xlim(xs_all.min() - pad_x, xs_all.max() + pad_x)
+        ax.set_ylim(ys_all.min() - pad_y, ys_all.max() + pad_y)
+        ax.set_aspect("auto")
     ax.axis("off")
-    plt.tight_layout()
+    plt.tight_layout(rect=(0, 0, 0.88, 1))
 
     if output_path:
-        fig.savefig(output_path, dpi=200, bbox_inches="tight")
+        fig.savefig(output_path, dpi=220, bbox_inches="tight")
         print(f"  Saved: {output_path}")
-    plt.show()
+    _maybe_show()
+    return fig
+
+
+# =============================================================================
+# STEP 3b: Trans-omic layered network (parallel-planes view)
+# =============================================================================
+
+def plot_transomic_layered_network(traversal_result: Dict,
+                                   omic_dfs: Dict[str, pd.DataFrame],
+                                   gene_set: Dict,
+                                   seed_node: Dict,
+                                   title: str = "UC3: Trans-Omic Layered Network",
+                                   output_path: str = None,
+                                   max_genes: int = 25):
+    """
+    Trans-omic network view: one horizontal plane per layer, genes placed
+    on each plane where they have data, vertical dashed connectors linking
+    the same gene across planes. A top plane holds the phenotype + disease
+    context. Designed for paper/supplementary use — rectangular, readable.
+
+    Layers shown (top → bottom):
+        Phenotype / Disease context
+        Gene Expression (TPM)
+        Copy Number Variation
+        DNA Methylation (Beta)
+        Protein Abundance (RPPA)
+
+    Gene dots on each layer are coloured by the layer's mean z-score for
+    that gene (saturating colormap per layer), and gene position on the
+    x-axis is shared across planes so the vertical connectors line up.
+    """
+    # ── Select top genes (by mean expression when available) ─────────────
+    expr = omic_dfs.get("expression")
+    if expr is not None and not expr.empty:
+        mean_expr = expr.mean(axis=0).sort_values(ascending=False)
+        top_genes = [g for g in mean_expr.index if g in gene_set][:max_genes]
+    else:
+        mean_expr = pd.Series(dtype=float)
+        top_genes = list(gene_set.keys())[:max_genes]
+
+    if not top_genes:
+        print("  [transomic] No genes available, skipping.")
+        return None
+
+    # ── Disease context: breast-specific first, others second ────────────
+    diseases = traversal_result.get("diseases", {})
+    breast_d = [(k, v) for k, v in diseases.items()
+                if v.get("is_breast_specific")][:4]
+    other_d  = [(k, v) for k, v in diseases.items()
+                if not v.get("is_breast_specific")][:3]
+    disease_list = breast_d + other_d
+
+    # ── Layer definitions (top → bottom) ─────────────────────────────────
+    layers = [
+        ("expression",  "Gene Expression (TPM)",    "#C0392B", "Reds"),
+        ("cnv",         "Copy Number Variation",    "#2980B9", "RdBu_r"),
+        ("methylation", "DNA Methylation (β)",      "#27AE60", "YlGn"),
+        ("protein",     "Protein Abundance (RPPA)", "#8E44AD", "PuBu"),
+    ]
+    active = [(ln, lbl, col, cmap) for ln, lbl, col, cmap in layers
+              if omic_dfs.get(ln) is not None and not omic_dfs[ln].empty]
+    if not active:
+        print("  [transomic] No omic layers, skipping.")
+        return None
+
+    # ── Per-gene per-layer value (z-score over samples, then mean) ───────
+    gene_values = {ln: {} for ln, _, _, _ in active}
+    for ln, *_ in active:
+        df = omic_dfs[ln]
+        for g in top_genes:
+            if g in df.columns:
+                v = df[g].dropna()
+                if len(v) > 0 and v.std() > 0:
+                    gene_values[ln][g] = float(((v - v.mean()) / v.std()).mean())
+                elif len(v) > 0:
+                    gene_values[ln][g] = 0.0
+
+    # ── Figure ───────────────────────────────────────────────────────────
+    n_planes = 1 + len(active)  # +1 for phenotype/disease plane
+    fig, ax = plt.subplots(figsize=(22, max(9, 1.6 * n_planes + 4)))
+
+    # Vertical positions for planes (top → bottom)
+    y_top = 0.95
+    y_bot = 0.08
+    plane_ys = np.linspace(y_top, y_bot, n_planes)
+    plane_gap = plane_ys[0] - plane_ys[1] if n_planes > 1 else 0.2
+
+    # Gene x-positions (shared across planes)
+    n_g = len(top_genes)
+    x_left, x_right = 0.18, 0.98
+    gene_x = {g: x_left + (x_right - x_left) * i / max(n_g - 1, 1)
+              for i, g in enumerate(top_genes)}
+
+    # Disease x-positions on the top plane
+    n_d = len(disease_list)
+    dx_left, dx_right = 0.25, 0.95
+    disease_x = {k: dx_left + (dx_right - dx_left) * i / max(n_d - 1, 1)
+                 for i, (k, _) in enumerate(disease_list)}
+
+    # ── Draw planes (background strips) ──────────────────────────────────
+    plane_h = plane_gap * 0.55
+    plane_colors_bg = [("#FDEDEC", "#E74C3C")]  # phenotype plane
+    for _, _, col, _ in active:
+        # Faint tinted background using layer colour
+        plane_colors_bg.append((col + "15" if len(col) == 7 else "#ECF0F1", col))
+
+    for i, (y, (bg, border)) in enumerate(zip(plane_ys, plane_colors_bg)):
+        rect = mpatches.FancyBboxPatch(
+            (0.02, y - plane_h / 2), 0.97, plane_h,
+            boxstyle="round,pad=0.002,rounding_size=0.01",
+            linewidth=0.8, edgecolor=border, facecolor=bg,
+            alpha=0.35, zorder=0,
+        )
+        ax.add_patch(rect)
+
+    # ── Plane labels (left side) ─────────────────────────────────────────
+    ax.text(0.01, plane_ys[0], "Phenotype\n& diseases",
+            ha="left", va="center", fontsize=11, fontweight="bold",
+            color="#C0392B")
+    for (ln, lbl, col, _), y in zip(active, plane_ys[1:]):
+        ax.text(0.01, y, lbl, ha="left", va="center",
+                fontsize=11, fontweight="bold", color=col)
+
+    # ── Top plane: phenotype + diseases ──────────────────────────────────
+    y_pheno = plane_ys[0]
+    # Phenotype label (centered left of disease cluster)
+    seed_label = seed_node.get("label", "Phenotype")[:25]
+    ax.scatter([0.14], [y_pheno], s=900, c="#E74C3C",
+               edgecolors="white", linewidths=1.2, zorder=3)
+    ax.text(0.14, y_pheno - 0.045, seed_label,
+            ha="center", va="top", fontsize=10, fontweight="bold",
+            color="#2C3E50")
+
+    # Disease nodes
+    for dk, dinfo in disease_list:
+        is_breast = dinfo.get("is_breast_specific", False)
+        col = "#D35400" if is_breast else "#F5B041"
+        x = disease_x[dk]
+        ax.scatter([x], [y_pheno], s=360, c=col,
+                   edgecolors="white", linewidths=0.8, zorder=3)
+        dlab = (dinfo.get("label") or dk)[:22]
+        ax.text(x, y_pheno + 0.028, dlab, ha="center", va="bottom",
+                fontsize=7, color="#2C3E50", rotation=20)
+        # Phenotype → disease connector
+        ax.plot([0.14, x], [y_pheno, y_pheno],
+                color="#C0392B", alpha=0.25, linewidth=0.8, zorder=1)
+
+    # ── Omic planes: gene dots + intra-plane ordering ────────────────────
+    layer_norms = {}
+    for (ln, _, _, cmap_name), y in zip(active, plane_ys[1:]):
+        vals = list(gene_values[ln].values())
+        if vals:
+            lo, hi = np.percentile(vals, [5, 95])
+            lim = max(abs(lo), abs(hi), 0.1)
+            layer_norms[ln] = Normalize(vmin=-lim, vmax=lim)
+        else:
+            layer_norms[ln] = Normalize(vmin=-1, vmax=1)
+
+    for (ln, _, base_col, cmap_name), y in zip(active, plane_ys[1:]):
+        cmap = plt.get_cmap(cmap_name)
+        norm = layer_norms[ln]
+        for g in top_genes:
+            if g not in gene_values[ln]:
+                # Missing: grey outline placeholder
+                ax.scatter([gene_x[g]], [y], s=60,
+                           facecolors="none", edgecolors="#BDC3C7",
+                           linewidths=0.8, zorder=3)
+                continue
+            v = gene_values[ln][g]
+            color = cmap(norm(v))
+            ax.scatter([gene_x[g]], [y], s=220,
+                       c=[color], edgecolors="white", linewidths=0.6,
+                       zorder=4)
+
+    # ── Vertical connectors: disease → top gene (hop-2) ─────────────────
+    y_top_omic = plane_ys[1] + plane_h / 2
+    for g in top_genes:
+        info = gene_set.get(g, {})
+        via = info.get("via_disease_key")
+        if via and via in disease_x:
+            ax.plot([disease_x[via], gene_x[g]],
+                    [y_pheno - plane_h / 2, y_top_omic],
+                    color="#D35400", alpha=0.30, linewidth=0.8, zorder=2)
+        else:
+            # Direct association: line from phenotype node
+            ax.plot([0.14, gene_x[g]],
+                    [y_pheno - plane_h / 2, y_top_omic],
+                    color="#3498DB", alpha=0.18, linewidth=0.6, zorder=1)
+
+    # ── Vertical connectors: same gene across omic planes ────────────────
+    for g in top_genes:
+        xs = gene_x[g]
+        for i in range(len(active) - 1):
+            y1 = plane_ys[1 + i] - plane_h / 2
+            y2 = plane_ys[2 + i] + plane_h / 2
+            ax.plot([xs, xs], [y1, y2],
+                    color="#95A5A6", alpha=0.35, linewidth=0.6,
+                    linestyle="--", zorder=1)
+
+    # ── Gene labels on the bottom plane ──────────────────────────────────
+    y_bottom = plane_ys[-1] - plane_h / 2 - 0.02
+    for g in top_genes:
+        info = gene_set.get(g, {})
+        lbl = info.get("label", g)
+        lbl = str(lbl).split(" (")[0][:12]
+        ax.text(gene_x[g], y_bottom, lbl, ha="right", va="top",
+                fontsize=8, rotation=45, color="#2C3E50")
+
+    # ── Per-layer colorbars (small, right side) ──────────────────────────
+    cbar_x = 0.995
+    for i, ((ln, _, _, cmap_name), y) in enumerate(zip(active, plane_ys[1:])):
+        sm = plt.cm.ScalarMappable(cmap=plt.get_cmap(cmap_name),
+                                    norm=layer_norms[ln])
+        sm.set_array([])
+        cax = fig.add_axes([0.905, y - plane_h / 2 + plane_h * 0.15,
+                            0.011, plane_h * 0.6])
+        cb = fig.colorbar(sm, cax=cax)
+        cb.ax.tick_params(labelsize=6)
+        cb.set_label("mean z", fontsize=7)
+
+    # ── Legend: disease types + connector semantics ──────────────────────
+    legend_handles = [
+        mpatches.Patch(color="#E74C3C", label="Phenotype"),
+        mpatches.Patch(color="#D35400", label="Breast-specific disease"),
+        mpatches.Patch(color="#F5B041", label="Other disease"),
+        plt.Line2D([0], [0], color="#3498DB", alpha=0.5, linewidth=1.2,
+                   label="Direct association (hop 1)"),
+        plt.Line2D([0], [0], color="#D35400", alpha=0.5, linewidth=1.2,
+                   label="Via disease (hop 2)"),
+        plt.Line2D([0], [0], color="#95A5A6", alpha=0.6, linewidth=1.0,
+                   linestyle="--", label="Same gene across layers"),
+    ]
+    ax.legend(handles=legend_handles, loc="lower left",
+              bbox_to_anchor=(0.00, -0.12),
+              ncol=3, fontsize=8, framealpha=0.95,
+              title="", columnspacing=1.2)
+
+    ax.set_xlim(0, 1.0)
+    ax.set_ylim(-0.05, 1.02)
+    ax.axis("off")
+    ax.set_title(title, fontsize=15, fontweight="bold", pad=14)
+    plt.tight_layout(rect=(0, 0.02, 0.89, 1))
+
+    if output_path:
+        fig.savefig(output_path, dpi=220, bbox_inches="tight")
+        print(f"  Saved: {output_path}")
+    _maybe_show()
     return fig
 
 
@@ -725,8 +1158,9 @@ def plot_multiomic_heatmap(omic_dfs: Dict[str, pd.DataFrame],
 
         sns.heatmap(sub_z.T, ax=ax, cmap=cmap, center=center,
                     xticklabels=False,
-                    yticklabels=(ax_idx == 0),
+                    yticklabels=True,
                     cbar_kws={"shrink": 0.5, "label": "z-score"})
+        ax.tick_params(axis="y", labelsize=7)
 
         ax.set_title(layer_titles.get(layer_name, layer_name),
                      fontsize=11, fontweight="bold")
@@ -740,7 +1174,7 @@ def plot_multiomic_heatmap(omic_dfs: Dict[str, pd.DataFrame],
     if output_path:
         fig.savefig(output_path, dpi=200, bbox_inches="tight")
         print(f"  Saved: {output_path}")
-    plt.show()
+    _maybe_show()
     return fig
 
 
@@ -989,7 +1423,7 @@ def plot_omic_barplot_comparison(omic_dfs: Dict[str, pd.DataFrame],
     if output_path:
         fig.savefig(output_path, dpi=200, bbox_inches="tight")
         print(f"  Saved: {output_path}")
-    plt.show()
+    _maybe_show()
     return fig
 
 
@@ -999,6 +1433,24 @@ def plot_omic_barplot_comparison(omic_dfs: Dict[str, pd.DataFrame],
 
 # Number of bootstrap resamples for the null distribution
 N_BOOTSTRAP = 50
+
+# Global flag controlling whether figures are shown interactively.
+# Default: False → figures are only saved to disk, never displayed.
+# Enable with --display-plot CLI flag.
+DISPLAY_PLOTS = False
+
+
+def _maybe_show(fig=None):
+    """Call plt.show() / fig.show() only if DISPLAY_PLOTS is True."""
+    if not DISPLAY_PLOTS:
+        return
+    try:
+        if fig is not None and hasattr(fig, "show"):
+            fig.show()
+        else:
+            plt.show()
+    except Exception:
+        pass
 
 
 def plot_bootstrap_profile(omic_dfs: Dict[str, pd.DataFrame],
@@ -1180,7 +1632,7 @@ def plot_bootstrap_profile(omic_dfs: Dict[str, pd.DataFrame],
     if output_path:
         fig.savefig(output_path, dpi=200, bbox_inches="tight")
         print(f"  Saved: {output_path}")
-    plt.show()
+    _maybe_show()
     return fig
 
 
@@ -1220,17 +1672,47 @@ def plot_sankey_diagram(traversal_result: Dict,
         top_genes = list(gene_set.keys())[:20]
         mean_expr_series = pd.Series(dtype=float)
 
-    # ── Disease list: breast-specific first, then fill to 8 ──────────────
-    breast_diseases = [(k, v) for k, v in diseases.items()
-                       if v.get("is_breast_specific")]
-    other_diseases  = [(k, v) for k, v in diseases.items()
-                       if not v.get("is_breast_specific")]
-    disease_list = breast_diseases[:5] + other_diseases[:max(0, 7 - len(breast_diseases[:5]))]
+    # ── Disease list ──────────────────────────────────────────────────────
+    # Methodological requirement: every disease that is the hop-2 source of
+    # at least one top gene MUST appear in the diagram, otherwise its links
+    # would be silently reassigned to "Direct association" (misrepresenting
+    # hop-2 edges as hop-1). We therefore include all such "used" diseases
+    # first, then fill remaining budget with other diseases for context.
+    used_disease_keys = {
+        gene_set.get(eid, {}).get("via_disease_key")
+        for eid in top_genes
+        if gene_set.get(eid, {}).get("via_disease_key") is not None
+    }
+    used_disease_keys.discard(None)
+
+    def _split_breast(items):
+        b = [(k, v) for k, v in items if v.get("is_breast_specific")]
+        o = [(k, v) for k, v in items if not v.get("is_breast_specific")]
+        return b, o
+
+    used_items   = [(k, diseases[k]) for k in used_disease_keys if k in diseases]
+    unused_items = [(k, v) for k, v in diseases.items() if k not in used_disease_keys]
+
+    used_breast, used_other     = _split_breast(used_items)
+    unused_breast, unused_other = _split_breast(unused_items)
+
+    # Budget: up to 8 disease nodes + 1 direct_assoc = 9 total
+    MAX_DISEASE_NODES = 8
+    # Priority 1: all diseases that actually source hop-2 genes
+    disease_list = used_breast + used_other
+    # Priority 2: fill remaining slots with context (breast-specific preferred)
+    remaining = MAX_DISEASE_NODES - len(disease_list)
+    if remaining > 0:
+        disease_list += unused_breast[:remaining]
+        remaining = MAX_DISEASE_NODES - len(disease_list)
+    if remaining > 0:
+        disease_list += unused_other[:remaining]
+    disease_list = disease_list[:MAX_DISEASE_NODES]
+
     # "Direct association" node for hop-1 genes
     disease_list.insert(0, ("direct_assoc", {
         "label": "Direct association", "is_breast_specific": False,
     }))
-    disease_list = disease_list[:9]
 
     # ── Active omic layers ────────────────────────────────────────────────
     layer_meta = {
@@ -1302,23 +1784,38 @@ def plot_sankey_diagram(traversal_result: Dict,
             link_colors.append("rgba(192,57,43,0.25)")
 
     # Diseases -> genes
+    # Invariant (enforced above): any gene with via_disease_key has its
+    # source disease present in d_idx. A gene without via_disease_key is
+    # hop-1 and correctly sources from "direct_assoc".
+    _missing_src = 0
     for eid in top_genes:
         if eid not in g_idx:
             continue
         info = gene_set.get(eid, {})
         via_key = info.get("via_disease_key")
-        src_node = d_idx.get(via_key) if via_key and via_key in d_idx \
-                   else d_idx.get("direct_assoc")
+        if via_key is None:
+            src_node = d_idx.get("direct_assoc")
+            is_hop2 = False
+        else:
+            src_node = d_idx.get(via_key)
+            is_hop2 = True
+            if src_node is None:
+                # Should not happen given the invariant; log and skip the
+                # link rather than silently reassigning to direct_assoc.
+                _missing_src += 1
+                continue
         if src_node is None:
-            src_node = 1  # fallback to first disease node
+            continue
         expr_val = float(mean_expr_series.get(eid, 1)) if len(mean_expr_series) else 1
         weight = max(1, min(20, expr_val * 0.8))
-        is_hop2 = (info.get("via_disease_key") is not None)
         lc = "rgba(211,84,0,0.30)" if is_hop2 else "rgba(52,152,219,0.30)"
         sources.append(src_node)
         targets.append(g_idx[eid])
         values.append(weight)
         link_colors.append(lc)
+    if _missing_src:
+        print(f"  [sankey] WARNING: {_missing_src} hop-2 gene link(s) skipped "
+              "because their via_disease_key is not in the diseases dict.")
 
     # Genes -> omic layers
     omic_link_colors = {
@@ -1369,6 +1866,24 @@ def plot_sankey_diagram(traversal_result: Dict,
         ),
     ))
 
+    # ── Legend: link colours (disease→gene) ──────────────────────────────
+    legend_items = [
+        ("Disease-associated gene (via disease, hop 2)", "rgba(211,84,0,0.70)"),
+        ("Directly associated gene (hop 1)",             "rgba(52,152,219,0.70)"),
+    ]
+    annotations = []
+    for i, (label, color) in enumerate(legend_items):
+        annotations.append(dict(
+            x=0.01, y=0.01 + i * 0.045,
+            xref="paper", yref="paper",
+            text=(f'<span style="color:{color};font-size:18px;">&#9646;</span>'
+                  f' <span style="font-size:10px;color:#2c3e50;">{label}</span>'),
+            showarrow=False,
+            align="left",
+            xanchor="left",
+            bgcolor="rgba(255,255,255,0.75)",
+        ))
+
     fig.update_layout(
         title=dict(text=f"<b>{title}</b>", font=dict(size=16, color="#2c3e50"),
                    x=0.5, xanchor="center", y=0.97),
@@ -1377,7 +1892,8 @@ def plot_sankey_diagram(traversal_result: Dict,
         plot_bgcolor="white",
         width=1400,
         height=820,
-        margin=dict(l=30, r=30, t=70, b=30),
+        margin=dict(l=30, r=30, t=70, b=50),
+        annotations=annotations,
     )
 
     # ── Export ────────────────────────────────────────────────────────────
@@ -1393,7 +1909,7 @@ def plot_sankey_diagram(traversal_result: Dict,
             fig.write_html(html_path)
             print(f"  Saved HTML fallback: {html_path}")
     try:
-        fig.show()
+        _maybe_show(fig)
     except Exception:
         pass
     return fig
@@ -1878,6 +2394,7 @@ def _draw_subgraph_panel(ax, traversal, seed_node, mean_expression,
         ax.axis("off")
         return
 
+
     pos = nx.spring_layout(G, seed=42,
                            k=2.2 / np.sqrt(max(len(G.nodes()), 1)),
                            iterations=80)
@@ -2175,7 +2692,7 @@ def plot_composite_figure_2panel(omic_dfs, gene_set,
             except Exception:
                 pass
             print(f"  Saved: {output_path}")
-        plt.show()
+        _maybe_show()
         return fig
 
 
@@ -2292,7 +2809,7 @@ def plot_composite_figure_4panel(traversal, omic_dfs, gene_set, seed_node,
             except Exception:
                 pass
             print(f"  Saved: {output_path}")
-        plt.show()
+        _maybe_show()
         return fig
 
 
@@ -2383,7 +2900,7 @@ def _plot_composite_3panel_stacked_impl(traversal, omic_dfs, gene_set, seed_node
             except Exception:
                 pass
             print(f"  Saved: {output_path}")
-        plt.show()
+        _maybe_show()
         return fig
 
 
@@ -2715,6 +3232,17 @@ def run_uc3(db_name: str = DB_NAME, cohort: str = COHORT,
         output_path=os.path.join(OUTPUT_DIR, "uc3_semantic_subgraph.png"),
     )
 
+    # 7a2. Trans-omic layered network (parallel-planes view)
+    # print("  [7a2] Trans-omic layered network...")
+    # try:
+    #     plot_transomic_layered_network(
+    #         traversal, omic_dfs, gene_set, seed_node,
+    #         title=f"UC3: Trans-Omic Layered Network — {seed_node.get('label', 'Phenotype')[:40]}",
+    #         output_path=os.path.join(OUTPUT_DIR, "uc3_transomic_layered_network.png"),
+    #     )
+    # except Exception as exc:
+    #     print(f"  ERROR in trans-omic layered network: {exc}")
+
     # 7b. Multi-omic heatmap
     print("  [7b] Multi-omic heatmap...")
     plot_multiomic_heatmap(
@@ -2759,14 +3287,14 @@ def run_uc3(db_name: str = DB_NAME, cohort: str = COHORT,
         seed_node=seed_node,
         output_path=os.path.join(OUTPUT_DIR, "uc3_figure_composite_2panel.png"),
     )
-    print("  [7f] Composite figure (4-panel, Bioinformatics style)...")
-    plot_composite_figure_4panel(
-        traversal, omic_dfs, gene_set, seed_node,
-        valid_genes=valid_genes,
-        random_omic_dfs=random_omic_dfs,
-        mean_expression=mean_expression,
-        output_path=os.path.join(OUTPUT_DIR, "uc3_figure_composite_4panel.png"),
-    )
+    # print("  [7f] Composite figure (4-panel, Bioinformatics style)...")
+    # plot_composite_figure_4panel(
+    #     traversal, omic_dfs, gene_set, seed_node,
+    #     valid_genes=valid_genes,
+    #     random_omic_dfs=random_omic_dfs,
+    #     mean_expression=mean_expression,
+    #     output_path=os.path.join(OUTPUT_DIR, "uc3_figure_composite_4panel.png"),
+    # )
 
     # 7g/7h. Final publication figure — 3-panel stacked (violin + boxplot variants)
     print("  [7g] Composite figure (3-panel stacked, violin null)...")
@@ -2795,6 +3323,15 @@ def run_uc3(db_name: str = DB_NAME, cohort: str = COHORT,
             path = os.path.join(OUTPUT_DIR, f"uc3_{layer_name}_matrix.csv")
             df.to_csv(path)
             print(f"  Saved {layer_name} matrix: {path}")
+
+    # Save random-baseline omic matrices (needed by --skip-analysis to
+    # rebuild violin/boxplot null distributions correctly; reconstructing
+    # from summary stats alone collapses the null to a point).
+    for layer_name, df in random_omic_dfs.items():
+        if df is not None and not df.empty:
+            path = os.path.join(OUTPUT_DIR, f"uc3_random_{layer_name}_matrix.csv")
+            df.to_csv(path)
+            print(f"  Saved random {layer_name} matrix: {path}")
 
     # Save traversal metadata
     n_hop1 = len([g for g in gene_set.values() if g.get("hop_distance") == 1])
@@ -2875,6 +3412,7 @@ def run_uc3_plots_only():
         print(f"  ERROR: Missing required files:\n  " + "\n  ".join(missing))
         print("  Run without --skip-analysis first to generate the data.")
         return
+
 
     # --- Load gene set ---
     print(f"  Loading: {gene_set_path}")
@@ -2969,6 +3507,17 @@ def run_uc3_plots_only():
     except Exception as exc:
         print(f"  ERROR in semantic subgraph: {exc}")
 
+    # # 7a2. Trans-omic layered network
+    # print("  [7a2] Trans-omic layered network...")
+    # try:
+    #     plot_transomic_layered_network(
+    #         traversal, omic_dfs, gene_set, seed_node,
+    #         title=f"UC3: Trans-Omic Layered Network — {seed_node.get('label', 'Phenotype')[:40]}",
+    #         output_path=os.path.join(OUTPUT_DIR, "uc3_transomic_layered_network.png"),
+    #     )
+    # except Exception as exc:
+    #     print(f"  ERROR in trans-omic layered network: {exc}")
+
     # 7b. Multi-omic heatmap
     print("  [7b] Multi-omic heatmap...")
     try:
@@ -2980,21 +3529,44 @@ def run_uc3_plots_only():
     except Exception as exc:
         print(f"  ERROR in multiomic heatmap: {exc}")
 
-    # 7c. Omic barplot comparison (needs a random set — reconstruct from CSV)
+    # 7c. Omic barplot comparison (needs a random set)
+    # Preferred: load per-layer random matrices saved by full runs
+    # (uc3_random_<layer>_matrix.csv). These preserve the per-sample x
+    # per-gene structure that violin/boxplot null distributions require.
+    # Fallback (legacy runs without random matrices): reconstruct a
+    # degenerate DF from the summary CSV — this collapses the null, so we
+    # emit a warning.
     print("  [7c] Omic barplot comparison...")
-    comp_path = os.path.join(OUTPUT_DIR, "uc3_phenotype_vs_random.csv")
     random_omic_dfs = {}; random_gene_set_plot = {}
-    if os.path.exists(comp_path):
-        comp_df = pd.read_csv(comp_path)
-        for _, row in comp_df.iterrows():
-            layer = row["layer"]
-            n_genes = int(row.get("n_random_genes", 1))
-            mean_abs = float(row.get("random_mean_abs_signal", 0))
-            rand_cols = [f"rand_{i}" for i in range(n_genes)]
-            random_omic_dfs[layer] = pd.DataFrame(
-                np.full((1, n_genes), mean_abs), columns=rand_cols)
-            for c in rand_cols:
-                random_gene_set_plot[c] = {"label": c}
+    random_layers = ["expression", "cnv", "methylation", "protein"]
+    loaded_from_matrix = False
+    for layer in random_layers:
+        rpath = os.path.join(OUTPUT_DIR, f"uc3_random_{layer}_matrix.csv")
+        if os.path.exists(rpath):
+            rdf = pd.read_csv(rpath, index_col=0)
+            if not rdf.empty:
+                random_omic_dfs[layer] = rdf
+                for c in rdf.columns:
+                    random_gene_set_plot[c] = {"label": c}
+                loaded_from_matrix = True
+
+    if not loaded_from_matrix:
+        comp_path = os.path.join(OUTPUT_DIR, "uc3_phenotype_vs_random.csv")
+        if os.path.exists(comp_path):
+            print("  WARNING: per-layer random matrices not found — falling "
+                  "back to summary-stat reconstruction. Violin/boxplot null "
+                  "distributions will be collapsed. Re-run without "
+                  "--skip-analysis to regenerate uc3_random_*_matrix.csv.")
+            comp_df = pd.read_csv(comp_path)
+            for _, row in comp_df.iterrows():
+                layer = row["layer"]
+                n_genes = int(row.get("n_random_genes", 1))
+                mean_abs = float(row.get("random_mean_abs_signal", 0))
+                rand_cols = [f"rand_{i}" for i in range(n_genes)]
+                random_omic_dfs[layer] = pd.DataFrame(
+                    np.full((1, n_genes), mean_abs), columns=rand_cols)
+                for c in rand_cols:
+                    random_gene_set_plot[c] = {"label": c}
     try:
         plot_omic_barplot_comparison(
             omic_dfs, random_omic_dfs, gene_set, random_gene_set_plot,
@@ -3088,6 +3660,13 @@ def run_uc3_plots_only():
 #%% Entry point
 if __name__ == "__main__":
     skip_analysis = "--skip-analysis" in sys.argv
+    # --display-plot: show figures interactively in addition to saving them.
+    # Default: figures are only written to disk (no GUI popup).
+    DISPLAY_PLOTS = "--display-plot" in sys.argv
+    if not DISPLAY_PLOTS:
+        # Use non-interactive backend to avoid any window creation overhead.
+        import matplotlib
+        matplotlib.use("Agg", force=True)
 
     if "ipykernel" not in sys.modules:
         if skip_analysis:
