@@ -1,0 +1,76 @@
+class_code,bioentity_type,source,source_type
+PR,protein,Protein Ontology,Ontology
+CHEBI,chemical,Chemical Entities of Biological Interest,Ontology
+dbSNP,variant,Database of Single Nucleotide Polymorphisms,Database
+MONDO,disease,Mondo Disease Ontology,Ontology
+ENST,rna,Ensembl Transcript,Database
+GO,go,Gene Ontology,Ontology
+R-HSA,pathway,Reactome,Database
+UBERON,anatomy,Uberon Anatomy Ontology,Ontology
+HP,phenotype,Human Phenotype Ontology,Ontology
+CLO,cell,Cell Line Ontology,Ontology
+NBO,phenotype,Neuro Behavior Ontology,Ontology
+EntrezID,gene,NCBI Entrez Gene,Database
+VO,catalyst,Vaccine Ontology,Ontology
+PW,pathway,Pathway Ontology,Ontology
+CL,cell,Cell Ontology,Ontology
+NCBITaxon,organism,NCBI Taxonomy,Database
+FOODON,chemical,Food Ontology,Ontology
+PATO,phenotype,Phenotype And Trait Ontology,Ontology
+GNO,gene,Gramene Gene Ontology,Database
+SO,rna,Sequence Ontology,Ontology
+NCIT_C,disease,NCI Thesaurus,Ontology
+ENVO,anatomy,Environment Ontology,Ontology
+EFO,phenotype,Experimental Factor Ontology,Ontology
+EFO,disease,Experimental Factor Ontology,Ontology
+R-NUL,pathway,Reactome,Database
+RO,phenotype,Relation Ontology,Ontology
+DOID,disease,Disease Ontology,Ontology
+BFO,go,Basic Formal Ontology,Ontology
+CHR,anatomy,Chromosome Ontology,Ontology
+MPATH,anatomy,Mouse Pathology Ontology,Ontology
+MF,phenotype,Mental Functioning Ontology,Ontology
+OGMS,disease,Ontology for General Medical Science,Ontology
+MOD,chemical,Protein Modification Ontology,Ontology
+ECTO,chemical,Environmental Conditions Treatment and Exposure Ontology,Ontology
+CARO,anatomy,Common Anatomy Reference Ontology,Ontology
+OGG,gene,Ontology of Genes and Genomes,Ontology
+owl,go,Web Ontology Language,Ontology
+R-GGA,pathway,Reactome,Database
+MAXO,phenotype,Medical Action Ontology,Ontology
+HsapDv,anatomy,Human Developmental Stages Ontology,Ontology
+core,phenotype,Core Ontology,Ontology
+PO,anatomy,Plant Ontology,Ontology
+cellline,cell,Cell Line Ontology,Ontology
+fma,anatomy,Foundational Model of Anatomy,Ontology
+mondo,phenotype,Mondo Disease Ontology,Ontology
+OBA,phenotype,Ontology of Biological Attributes,Ontology
+Thesaurus.owl,anatomy,NCI Thesaurus,Ontology
+so,phenotype,Sequence Ontology,Ontology
+NCIT_C,anatomy,NCI Thesaurus,Ontology
+CP,phenotype,Clinical Phenotype Ontology,Ontology
+pato,phenotype,Phenotype And Trait Ontology,Ontology
+BSPO,anatomy,Biological Spatial Ontology,Ontology
+anatomy,anatomy,SNOMED Anatomy,Ontology
+OAE,phenotype,Ontology of Adverse Events,Ontology
+PCO,phenotype,Population and Community Ontology,Ontology
+ExO,phenotype,Exposure Ontology,Ontology
+chebi,chemical,Chemical Entities of Biological Interest,Ontology
+pw,pathway,Pathway Ontology,Ontology
+envo,anatomy,Environment Ontology,Ontology
+cl,cell,Cell Ontology,Ontology
+so,phenotype,Sequence Ontology,Ontology 
+ro.owl,phenotype,Relation Ontology,Ontology
+MFOMD,phenotype,Mental Functioning Ontology for Mood Disorders,Ontology
+SIO,phenotype,Semanticscience Integrated Ontology,Ontology
+IDO,disease,Infectious Disease Ontology,Ontology
+exo.obo,phenotype,Exposure Ontology,Ontology
+FBbt,anatomy,Drosophila Anatomy Ontology,Ontology
+activates,phenotype,Relation Ontology,Ontology
+pr,protein,Protein Ontology,Ontology
+UMLS,phenotype,Unified Medical Language System,Ontology
+MFOEM,phenotype,Mental Functioning Ontology,Ontology
+FMA,anatomy,Foundational Model of Anatomy,Ontology
+R-GGA,pathway,Reactome,Ontology
+RDF,go,Resource Description Framework,Ontology
+UPHENO,phenotype,Unified Phenotype Ontology,Ontology

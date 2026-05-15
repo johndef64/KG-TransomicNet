@@ -1,0 +1,124 @@
+.vscode/
+*__pycache__*
+scripts/__pycache__/*
+scripts/archive*
+
+
+# ignore all files in data directory
+# data/*
+data/omics/maps/temp/biomart_gene_mappings_chr*
+data/omics/TCGA*
+data/arango*
+data/mappings/backup*
+data/mappings/monarch*
+data/mappings/pkt*
+data/mappings/temp*
+data/mappings/dev*
+data/omics/PANCAN*
+data/PANCAN*
+data/biolink*
+data/pkt/builds/v3.0.2/sample*
+data/prior*
+data/sample*
+temp_dir/*
+*backup*gi
+
+# ignore docs
+framework-docs/*
+notes/*
+docs/*
+paper/*
+kg_benchmark/*
+kg_generic*
+
+#ignore
+gnn/*
+paper*
+
+# ignore all files in kg-benchmark/pkt_data/builds directory
+kg-benchmark/pkt/pkt_data/builds/*
+data/pkt/builds/do*
+data/pkt/builds/pl*
+data/pkt/builds/v1*
+data/pkt/builds/v2*
+data/pkt/builds/v3.0.2/gpick*
+data/pkt/builds/v3.0.2/top*
+data/pkt/builds/v3.0.2/filelist*
+data/pkt/builds/v3.0.2/edgesour*
+data/pkt/builds/pkt*
+data/pkt/builds/Phe*
+*mappings_chr*
+data/arangodb_collections/*
+
+#  specific files
+data/pkt/kg_ana*
+data/pkt/READ*
+data/pkt/pkt_onto*
+data/pkt/create_*
+data/pkt/kg_insig*
+
+# omics data structure files
+data/omics/data-structure/*
+data/omics/readme.md
+
+find_everywhere.py
+webpagetext_scraper.py
+
+# scrpts
+scripts/pkt_read.pickle*
+scripts/temp_bio*
+scripts/archive*
+scripts/docs*
+scripts/dumps*
+
+# Mapping provenance scripts that are scratch/notebooks, not reproducible CLIs.
+# See data/mappings/README.md for the full story.
+scripts/mapping/biomart_fixer.py
+scripts/mapping/biomart_fixer_v2.py
+scripts/mapping/biomart_fixer_v2_part2.py
+scripts/mapping/create_mappings_collection.py
+scripts/kg_utils/
+
+# Interactive notebook scratchpad superseded by build_transomic_network.py.
+# Kept locally for DB exploration; the production CLI lives in
+# scripts/build_transomic_network.py.
+scripts/build_kg_transomics_scratch.py
+
+# plots
+plots/*
+
+# Results
+results/uc*
+results/data*
+transomic-networks/*
+
+
+# ignore all files .owl .obo .tsv .nt .csv 
+*.owl
+*.obo
+# *.tsv
+*.nt
+#*.csv
+*.lnk
+# *.zip
+*.gz
+*.7z
+*.probemap
+*.url
+*.pdf
+# *.json
+
+# Tranne questa directory
+# !data/omics/
+# !data/pkt/
+
+# except for specific files
+!data\omics\metadata\TCGA_sample_type_codes.csv
+!data\pkt\metadata\LabelClassDataset_metadata.csv
+
+# Heavy curated mapping files (shipped compressed; build_omics_collections
+# unzips them on first use if the .tsv is not present).
+!data/mappings/biomart_gene_mappings_filled_extended.tsv.zip
+!data/mappings/biomart_ensg_enst_mapping.tsv.zip
+!data/mappings/rsid_checkpoint.tsv.zip
+!data/mappings/mirna_hgcn_map.tsv.zip
