@@ -13,7 +13,7 @@ Usage
     python scripts/load_graph_to_arangodb.py
 
     # Custom database name and JSON directory
-    python scripts/load_graph_to_arangodb.py --db PKT_test10000 \\
+    python scripts/load_graph_to_arangodb.py --db PKT_TransomicNet_v3 \\
         --input-dir data/pkt/builds/v3.0.2/property_graph/sample_20260514_120000
 
     # Load from a graph-format JSON file (single file with 'nodes' and 'edges' keys)
@@ -445,7 +445,7 @@ if __name__ == "__main__":
 
 """
 
-Knowledge Graph in PKT_test10000:
+Knowledge Graph in PKT_TransomicNet_v3:
 - collection: nodes
   properties: _key, uri, namespace, entity_id, class_code, label, bioentity_type, description, synonym, source, source_type, integer_id, entrez_id, uniprot_id, rsid, mondo_id, hp_id
 

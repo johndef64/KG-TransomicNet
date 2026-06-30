@@ -26,7 +26,7 @@ If --sample-id is omitted, the first sample having all requested omic types
 
 CLI flags (selected)
 --------------------
-  --db NAME                ArangoDB database name (default: PKT_test10000).
+  --db NAME                ArangoDB database name (default: PKT_TransomicNet_v3).
   --cohort COHORT          TCGA cohort (default: TCGA-BRCA).
   --host URL               ArangoDB host (default: http://localhost:8529).
   --user / --password      ArangoDB credentials (default: project defaults).
@@ -241,14 +241,14 @@ Taglia tutto il layer molecolare e tiene solo i link gene→fenotipo→malattia�
 
 # from arangodb_utils import *
 # # --- FUNZIONI DI BASE DI ARANGODB ---
-# db_connection = setup_arangodb_connection("PKT_test10000")
+# db_connection = setup_arangodb_connection("PKT_TransomicNet_v3")
 
 
 def parse_args() -> argparse.Namespace:
     import arangodb_utils
     parser = argparse.ArgumentParser(description="Build a transomic property graph for a sample")
-    parser.add_argument("--db", "--db-name", dest="db", default="PKT_test10000",
-                        help="ArangoDB database name (default: PKT_test10000).")
+    parser.add_argument("--db", "--db-name", dest="db", default="PKT_TransomicNet_v3",
+                        help="ArangoDB database name (default: PKT_TransomicNet_v3).")
     parser.add_argument("--cohort", default="TCGA-BRCA",
                         help="Cohort identifier (default: TCGA-BRCA).")
     parser.add_argument("--host", default=arangodb_utils.arangodb_hosts,
@@ -509,7 +509,7 @@ if __name__ == "__main__":
     else:
         print("Running inside interactive environment; skipping CLI. Call build_transomic_network_for_sample() directly with desired parameters.")
         # Uncomment and execute in a notebook/VS Code interactive window
-        DB_NAME = "PKT_test10000"
+        DB_NAME = "PKT_TransomicNet_v3"
         COHORT = "TCGA-BRCA"
         Case = "TCGA-BH-A1F2" #TCGA-GM-A2DD
         Sample = "01"

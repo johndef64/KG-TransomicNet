@@ -6,7 +6,7 @@ import json
 import traceback
 
 # --- CONFIGURAZIONE ---
-db_name = 'PKT_test10000'
+db_name = 'PKT_TransomicNet_v3'
 arangodb_hosts = 'http://localhost:8529'
 arangodb_user = 'root'
 arangodb_password = 'avocadodb'
@@ -1031,7 +1031,7 @@ def visualize_random_graph(db_connection,
         traceback.print_exc()
         return None
 
-def open_arango_web_viewer(graph_name='PKT_graph', host='localhost', port=8529, db_name='PKT_test10000'):
+def open_arango_web_viewer(graph_name='PKT_graph', host='localhost', port=8529, db_name='PKT_TransomicNet_v3'):
     """Open ArangoDB web interface graph viewer in browser"""
     import webbrowser
     
@@ -2442,14 +2442,14 @@ if __name__ == "__main__":
 #%%
 list_databases()
 #%%
-# rename_database('PKT_test10000', 'PKT_transomics_v1')
+# rename_database('PKT_TransomicNet_v3', 'PKT_transomics_v1')
 # #%%
 # name = "PKT_transomics_v1"
 # delete_database(name)
 # #%%
-# dump_database("PKT_test10000", include_system=False)
+# dump_database("PKT_TransomicNet_v3", include_system=False)
 # #%%
-# restore_database_from_dump("./dumps/PKT_test10000_20240605_123456", target_db_name="PKT_transomics_v1", overwrite=True)
+# restore_database_from_dump("./dumps/PKT_TransomicNet_v3_20240605_123456", target_db_name="PKT_transomics_v1", overwrite=True)
 #%%
 
 # --- MAIN DI TEST ---
