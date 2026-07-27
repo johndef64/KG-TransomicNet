@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "KG-TransomicNet: Semantic–Quantitative Property Graph of PheKnowLator and Multi-Omics"
+authors:
+  - family-names: "De Filippis"
+    given-names: "Giovanni Maria"
+    # orcid: "https://orcid.org/0000-0000-0000-0000"
+  - family-names: "Rinaldi"
+    given-names: "Antonio Maria"
+version: "1.0.0"
+date-released: "2026-07-27"
+license: MIT
+url: "https://github.com/johndef64/KG-TransomicNet"
