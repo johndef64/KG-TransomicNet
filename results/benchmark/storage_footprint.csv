@@ -1,0 +1,12 @@
+collection,group,layer,n_documents,documents_mb,indexes_mb,total_mb,n_index_docs,n_vector_docs
+CASES,support,,16086,3.13,0.54,3.67,,
+CNV,quantitative_layer,CNV,10665,2808.77,0.93,2809.7,33,10632
+GENES,support,,61855,11.96,1.95,13.91,,
+GENE_EXPRESSION,quantitative_layer,RNA-Seq,15475,4980.71,1.4,4982.1,42,15433
+METHYLATION,quantitative_layer,Methylation,3150,1087.78,0.23,1088.01,13,3137
+MIRNA,quantitative_layer,miRNA,13441,72.89,1.26,74.15,38,13403
+PROJECTS,support,,42,0.01,0.0,0.01,,
+PROTEIN,quantitative_layer,RPPA,7936,39.21,0.7,39.91,32,7904
+SAMPLES,support,,19287,2.62,1.14,3.76,,
+edges,semantic_backbone,,11082103,1073.31,1084.54,2157.86,,
+nodes,semantic_backbone,,780753,164.66,54.36,219.02,,

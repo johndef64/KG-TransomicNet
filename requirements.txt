@@ -24,6 +24,10 @@ rdflib>=7.0
 # Util
 requests>=2.31
 
+# Benchmarks (scripts/benchmark/)
+pyarrow>=14.0            # Parquet baseline in bench_schema.py
+psutil>=5.9              # machine specs recorded in environment.json
+
 #Optional: for mapping
 pybiomart>=0.2.0
 sqlalchemy>=2.0

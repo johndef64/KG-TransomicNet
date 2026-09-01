@@ -56,6 +56,7 @@ import argparse
 import ast
 import json
 import logging
+import math
 import os
 import zipfile
 from pathlib import Path
@@ -240,11 +241,33 @@ class CollectionBuilder:
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
+    @staticmethod
+    def _json_default(obj):
+        """Serialise the numpy scalars pandas leaves in the documents.
+
+        Values read through pandas arrive as numpy types (int64, float64,
+        bool_), which the stdlib encoder rejects. Whether a study trips this
+        depends on the dtypes inferred from its own files, so it must be
+        handled centrally rather than per builder.
+        """
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            value = float(obj)
+            return value if math.isfinite(value) else None
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, pd.Timestamp):
+            return obj.isoformat()
+        raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+
     def save_collection(self, documents: List[Dict], collection_name: str):
         out = self.output_dir / f"{collection_name}.json"
         with open(out, "w", encoding="utf-8") as fh:
             for doc in documents:
-                json.dump(doc, fh, ensure_ascii=False)
+                json.dump(doc, fh, ensure_ascii=False, default=self._json_default)
                 fh.write("\n")
         logger.info(f"  -> wrote {len(documents):,} documents to {out.name}")
 
@@ -287,6 +310,28 @@ class SemanticLayerBuilder(CollectionBuilder):
             })
         return genes
 
+    @staticmethod
+    def _as_list(value) -> List[str]:
+        """Normalise a GDC list-valued field to a list of strings.
+
+        The field arrives as a stringified Python list when the project has
+        several values ("['A', 'B']") but as a bare string when it has exactly
+        one ("Adenomas and Adenocarcinomas"). literal_eval raises on the latter,
+        so fall back to treating it as a single element.
+        """
+        if isinstance(value, list):
+            return value
+        if value is None or (isinstance(value, float) and pd.isna(value)):
+            return []
+        text = str(value).strip()
+        if text.startswith("[") and text.endswith("]"):
+            try:
+                parsed = ast.literal_eval(text)
+                return list(parsed) if isinstance(parsed, (list, tuple)) else [str(parsed)]
+            except (ValueError, SyntaxError):
+                pass
+        return [text] if text else []
+
     def build_project_node(self, clinical_df: pd.DataFrame) -> List[Dict]:
         logger.info("Building PROJECT collection ...")
         return [{
@@ -294,7 +339,7 @@ class SemanticLayerBuilder(CollectionBuilder):
             "name":           clinical_df.loc[0, "name.project"],
             "program":        clinical_df.loc[0, "name.program.project"],
             "primary_site":   clinical_df.loc[0, "primary_site.project"],
-            "disease_types":  ast.literal_eval(clinical_df.loc[0, "disease_type.project"]),
+            "disease_types":  self._as_list(clinical_df.loc[0, "disease_type.project"]),
             "entity_type":    "project",
             "n_cases":        int(clinical_df["submitter_id"].nunique()),
             "n_samples":      int(clinical_df["sample"].nunique()),

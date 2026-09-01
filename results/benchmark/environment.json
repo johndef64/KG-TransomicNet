@@ -1,0 +1,12 @@
+{
+  "arangodb_version": "3.11.8",
+  "arangodb_license": "community",
+  "storage_engine": "rocksdb",
+  "python": "3.12.0",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 158 Stepping 9, GenuineIntel",
+  "cpu_logical": 8,
+  "cpu_physical": 4,
+  "ram_gb": 34.2,
+  "timestamp": "2026-09-01T21:57:29"
+}

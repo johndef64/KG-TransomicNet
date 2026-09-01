@@ -92,6 +92,15 @@ results/uc*
 results/data*
 transomic-networks/*
 
+# Benchmark results: the CSVs and environment.json ARE tracked on purpose --
+# they are the provenance of every performance figure reported in the paper.
+# Excluded here:
+#   - *.log: byproduct of run_all_cohorts.py, carries local absolute paths,
+#     and the same data is already in cohort_ingestion.csv
+#   - SUMMARY.md: internal working notes, not a release artefact
+results/benchmark/*.log
+results/benchmark/SUMMARY.md
+
 
 # ignore all files .owl .obo .tsv .nt .csv 
 *.owl

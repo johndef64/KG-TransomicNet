@@ -1,0 +1,7 @@
+query,variant,index_state,cold_first_ms,n_rows,repeats,mean_ms,p50_ms,p95_ms,min_ms,max_ms
+Q1a_semantic_direct,genetically interacts with / 200 seeds,as_deployed,18496.43,164,10,1395.4,1396.92,1491.65,1295.51,1491.65
+Q1b_semantic_2hop,co-pathway / 50 seeds,as_deployed,1152.1,5000,10,817.36,751.1,1205.57,615.07,1205.57
+Q1b_semantic_2hop,co-protein / 50 seeds,as_deployed,928.11,6,10,913.09,897.29,1149.48,780.53,1149.48
+Q2_quantitative,3-layer alignment / 878 samples,as_deployed,5296.87,1,10,53.08,54.24,59.62,46.01,59.62
+Q3_end_to_end,HP:0003002 depth=1,as_deployed,293.1,1,10,306.36,305.81,390.63,235.28,390.63
+Q3_end_to_end,HP:0003002 depth=2,as_deployed,10897.95,1,10,5352.47,5365.2,5750.85,4827.37,5750.85

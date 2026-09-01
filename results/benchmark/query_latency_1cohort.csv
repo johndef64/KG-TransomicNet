@@ -1,0 +1,13 @@
+query,variant,index_state,cold_first_ms,n_rows,repeats,mean_ms,p50_ms,p95_ms,min_ms,max_ms
+Q1a_semantic_direct,genetically interacts with / 200 seeds,as_deployed,3698.76,164,10,1362.26,1342.65,1559.51,1221.46,1559.51
+Q1b_semantic_2hop,co-pathway / 50 seeds,as_deployed,561.15,5000,10,538.38,520.99,698.02,439.86,698.02
+Q1b_semantic_2hop,co-protein / 50 seeds,as_deployed,586.38,6,10,603.19,598.19,680.87,560.13,680.87
+Q2_quantitative,3-layer alignment / 878 samples,as_deployed,68.62,1,10,29.43,29.11,33.2,27.91,33.2
+Q3_end_to_end,HP:0003002 depth=1,as_deployed,169.28,1,10,119.53,113.46,150.51,107.76,150.51
+Q3_end_to_end,HP:0003002 depth=2,as_deployed,6625.35,1,10,5999.07,6043.23,6645.84,5488.24,6645.84
+Q1a_semantic_direct,genetically interacts with / 200 seeds,with_declared_idx,1079.55,164,10,900.85,893.23,1032.73,805.46,1032.73
+Q1b_semantic_2hop,co-pathway / 50 seeds,with_declared_idx,355.87,5000,10,381.81,346.45,530.75,320.69,530.75
+Q1b_semantic_2hop,co-protein / 50 seeds,with_declared_idx,375.52,6,10,404.21,399.6,433.32,384.43,433.32
+Q2_quantitative,3-layer alignment / 878 samples,with_declared_idx,33.6,1,10,23.72,22.87,29.93,22.31,29.93
+Q3_end_to_end,HP:0003002 depth=1,with_declared_idx,106.33,1,10,115.02,111.53,136.4,101.69,136.4
+Q3_end_to_end,HP:0003002 depth=2,with_declared_idx,4099.23,1,10,4249.21,4157.3,4829.07,3893.77,4829.07

@@ -1,0 +1,5 @@
+layout,n_documents,ingest_s,storage_mb,A_sample_slice_ms,B_feature_slice_ms,C_geneset_slice_ms,n_features,n_samples,n_measurements
+S6_vector_index,1227,3.32,22.83,3.63,16.78,903.68,2000,1226,2452000
+S2_measurement_as_property,2000,6.06,64.18,19.13,3.82,275.87,2000,1226,2452000
+S3_kg_plus_external_matrix,1,6.04,22.58,186.44,73.41,322.1,2000,1226,2452000
+S1_measurement_as_node,2452000,157.47,402.66,17.56,13.08,2188.38,2000,1226,2452000
