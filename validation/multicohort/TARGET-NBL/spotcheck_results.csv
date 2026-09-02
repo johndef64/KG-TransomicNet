@@ -1,0 +1,101 @@
+layer,feature,index_value,authoritative,node_exists,verdict,note
+RNA-Seq,ENSG00000254346,100873173,100873173,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000136536,64844,64844,True,ok,
+RNA-Seq,ENSG00000084733,10890,10890,True,ok,
+RNA-Seq,ENSG00000266202,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000199133,406886,406886,True,ok,
+RNA-Seq,ENSG00000185722,51479,51479,True,ok,
+RNA-Seq,ENSG00000179152,285343,285343,True,ok,
+RNA-Seq,ENSG00000148843,22984,22984,True,ok,
+RNA-Seq,ENSG00000265478,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000133111,5994,5994,True,ok,
+RNA-Seq,ENSG00000258500,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000266086,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000286037,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000240895,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000125733,9322,9322,True,ok,
+RNA-Seq,ENSG00000249893,106478950,106478950,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000227784,100132598,100132598,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000099250,8829,8829,True,ok,
+RNA-Seq,ENSG00000092036,54930,54930,True,ok,
+RNA-Seq,ENSG00000129455,11202,11202,True,ok,
+RNA-Seq,ENSG00000177606,3725,3725,True,ok,
+RNA-Seq,ENSG00000182472,147968,147968,True,ok,
+RNA-Seq,ENSG00000235857,352905,352905,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000251035,106480779,106480779,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000087299,79944,79944,True,ok,
+RNA-Seq,ENSG00000243478,344454,344454,True,ok,
+RNA-Seq,ENSG00000171346,3866,3866,True,ok,
+RNA-Seq,ENSG00000261832,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000255145,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000260497,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000240828,140660,140660,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000227536,100132415,100132415,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000178209,5339,5339,True,ok,
+RNA-Seq,ENSG00000230435,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000249778,106479033,106479033,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000199638,100873585,100873585,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000274866,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000283438,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000023228,4719,4719,True,ok,
+RNA-Seq,ENSG00000268170,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000274409,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000160293,7410,7410,True,ok,
+RNA-Seq,ENSG00000260217,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000227863,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000213355,205272,205272,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000199591,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000158201,171586,171586,True,ok,
+RNA-Seq,ENSG00000176623,51115,51115,True,ok,
+RNA-Seq,ENSG00000269138,441843,441843,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000212664,645296,645296,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000133027,10400,10400,True,ok,
+RNA-Seq,ENSG00000128872,29767,29767,True,ok,
+RNA-Seq,ENSG00000223768,642852,642852,True,ok,
+RNA-Seq,ENSG00000130768,27293,27293,True,ok,
+RNA-Seq,ENSG00000218186,100289319,100289319,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000279486,144125,144125,True,ok,
+RNA-Seq,ENSG00000213839,100233198,100233198,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000251212,100873200,100873200,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000197170,5718,5718,True,ok,
+RNA-Seq,ENSG00000274578,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000103671,9325,9325,True,ok,
+RNA-Seq,ENSG00000264488,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000231421,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000239439,100132753,100132753,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000141956,63977,63977,True,ok,
+RNA-Seq,ENSG00000288059,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000223635,101927478,101927478,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000121413,65982,65982,True,ok,
+RNA-Seq,ENSG00000241984,652978,652978,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000201811,124904975,124904975,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000277531,110806277,110806277,True,ok,
+RNA-Seq,ENSG00000253499,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000252623,100873723,100873723,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000285572,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000281490,100130600,100130600,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000219545,729852,729852,True,ok,
+RNA-Seq,ENSG00000248531,100288013,100288013,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000169469,6699,6699,True,ok,
+RNA-Seq,ENSG00000260799,102724430,102724430,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000116266,6814,6814,True,ok,
+RNA-Seq,ENSG00000104918,56729,56729,True,ok,
+RNA-Seq,ENSG00000256458,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000180867,171423,171423,True,ok,
+RNA-Seq,ENSG00000270577,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000201317,106481764,106481764,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000122043,440131,440131,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000280137,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000182504,79598,79598,True,ok,
+RNA-Seq,ENSG00000283155,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000132603,51388,51388,True,ok,
+RNA-Seq,ENSG00000223787,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000199603,106481480,106481480,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000230829,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000254034,109729178,109729178,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000278122,102724655,102724655,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000221184,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000161973,146849,146849,True,ok,
+RNA-Seq,ENSG00000222345,109616991,109616991,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000215966,100126310,100126310,True,ok,
+RNA-Seq,ENSG00000174669,3177,3177,True,ok,

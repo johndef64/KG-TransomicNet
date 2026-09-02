@@ -1,0 +1,201 @@
+layer,feature,index_value,authoritative,node_exists,verdict,note
+RNA-Seq,ENSG00000254346,100873173,100873173,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000136536,64844,64844,True,ok,
+RNA-Seq,ENSG00000084733,10890,10890,True,ok,
+RNA-Seq,ENSG00000266202,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000199133,406886,406886,True,ok,
+RNA-Seq,ENSG00000185722,51479,51479,True,ok,
+RNA-Seq,ENSG00000179152,285343,285343,True,ok,
+RNA-Seq,ENSG00000148843,22984,22984,True,ok,
+RNA-Seq,ENSG00000265478,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000133111,5994,5994,True,ok,
+RNA-Seq,ENSG00000258500,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000266086,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000286037,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000240895,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000125733,9322,9322,True,ok,
+RNA-Seq,ENSG00000249893,106478950,106478950,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000227784,100132598,100132598,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000099250,8829,8829,True,ok,
+RNA-Seq,ENSG00000092036,54930,54930,True,ok,
+RNA-Seq,ENSG00000129455,11202,11202,True,ok,
+RNA-Seq,ENSG00000177606,3725,3725,True,ok,
+RNA-Seq,ENSG00000182472,147968,147968,True,ok,
+RNA-Seq,ENSG00000235857,352905,352905,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000251035,106480779,106480779,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000087299,79944,79944,True,ok,
+RNA-Seq,ENSG00000243478,344454,344454,True,ok,
+RNA-Seq,ENSG00000171346,3866,3866,True,ok,
+RNA-Seq,ENSG00000261832,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000255145,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000260497,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000240828,140660,140660,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000227536,100132415,100132415,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000178209,5339,5339,True,ok,
+RNA-Seq,ENSG00000230435,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000249778,106479033,106479033,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000199638,100873585,100873585,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000274866,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000283438,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000023228,4719,4719,True,ok,
+RNA-Seq,ENSG00000268170,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000274409,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000160293,7410,7410,True,ok,
+RNA-Seq,ENSG00000260217,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000227863,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000213355,205272,205272,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000199591,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000158201,171586,171586,True,ok,
+RNA-Seq,ENSG00000176623,51115,51115,True,ok,
+RNA-Seq,ENSG00000269138,441843,441843,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000212664,645296,645296,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000133027,10400,10400,True,ok,
+RNA-Seq,ENSG00000128872,29767,29767,True,ok,
+RNA-Seq,ENSG00000223768,642852,642852,True,ok,
+RNA-Seq,ENSG00000130768,27293,27293,True,ok,
+RNA-Seq,ENSG00000218186,100289319,100289319,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000279486,144125,144125,True,ok,
+RNA-Seq,ENSG00000213839,100233198,100233198,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000251212,100873200,100873200,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000197170,5718,5718,True,ok,
+RNA-Seq,ENSG00000274578,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000103671,9325,9325,True,ok,
+RNA-Seq,ENSG00000264488,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000231421,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000239439,100132753,100132753,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000141956,63977,63977,True,ok,
+RNA-Seq,ENSG00000288059,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000223635,101927478,101927478,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000121413,65982,65982,True,ok,
+RNA-Seq,ENSG00000241984,652978,652978,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000201811,124904975,124904975,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000277531,110806277,110806277,True,ok,
+RNA-Seq,ENSG00000253499,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000252623,100873723,100873723,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000285572,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000281490,100130600,100130600,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000219545,729852,729852,True,ok,
+RNA-Seq,ENSG00000248531,100288013,100288013,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000169469,6699,6699,True,ok,
+RNA-Seq,ENSG00000260799,102724430,102724430,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000116266,6814,6814,True,ok,
+RNA-Seq,ENSG00000104918,56729,56729,True,ok,
+RNA-Seq,ENSG00000256458,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000180867,171423,171423,True,ok,
+RNA-Seq,ENSG00000270577,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000201317,106481764,106481764,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000122043,440131,440131,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000280137,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000182504,79598,79598,True,ok,
+RNA-Seq,ENSG00000283155,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000132603,51388,51388,True,ok,
+RNA-Seq,ENSG00000223787,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000199603,106481480,106481480,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000230829,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000254034,109729178,109729178,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000278122,102724655,102724655,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000221184,,,False,unverifiable,ENSG not in BioMart reference
+RNA-Seq,ENSG00000161973,146849,146849,True,ok,
+RNA-Seq,ENSG00000222345,109616991,109616991,False,ok,xref ok but EntrezID node missing
+RNA-Seq,ENSG00000215966,100126310,100126310,True,ok,
+RNA-Seq,ENSG00000174669,3177,3177,True,ok,
+miRNA,hsa-mir-575,MIR575,MIR575,,ok,
+miRNA,hsa-mir-3666,MIR3666,MIR3666,,ok,
+miRNA,hsa-mir-6127,MIR6127,MIR6127,,ok,
+miRNA,hsa-mir-602,MIR602,MIR602,,ok,
+miRNA,hsa-mir-566,MIR566,MIR566,,ok,
+miRNA,hsa-mir-1297,MIR1297,MIR1297,,ok,
+miRNA,hsa-mir-548aw,MIR548AW,MIR548AW,,ok,
+miRNA,hsa-mir-553,MIR553,MIR553,,ok,
+miRNA,hsa-mir-3065,MIR3065,MIR3065,,ok,
+miRNA,hsa-mir-486-1,MIR486-1,MIR486-1,,ok,
+miRNA,hsa-mir-6507,MIR6507,MIR6507,,ok,
+miRNA,hsa-mir-3529,MIR3529,MIR3529,,ok,
+miRNA,hsa-mir-298,MIR298,MIR298,,ok,
+miRNA,hsa-mir-4665,MIR4665,MIR4665,,ok,
+miRNA,hsa-mir-4433a,MIR4433A,MIR4433A,,ok,
+miRNA,hsa-mir-3670-3,MIR3670-3,MIR3670-3,,ok,
+miRNA,hsa-mir-5581,MIR5581,MIR5581,,ok,
+miRNA,hsa-mir-6072,MIR6072,MIR6072,,ok,
+miRNA,hsa-mir-5091,MIR5091,MIR5091,,ok,
+miRNA,hsa-mir-3186,MIR3186,MIR3186,,ok,
+miRNA,hsa-mir-605,MIR605,MIR605,,ok,
+miRNA,hsa-mir-3978,MIR3978,MIR3978,,ok,
+miRNA,hsa-mir-7106,MIR7106,MIR7106,,ok,
+miRNA,hsa-mir-6756,MIR6756,MIR6756,,ok,
+miRNA,hsa-mir-6770-1,MIR6770-1,MIR6770-1,,ok,
+miRNA,hsa-mir-1273f,MIR1273F,MIR1273F,,ok,
+miRNA,hsa-mir-3202-2,MIR3202-2,MIR3202-2,,ok,
+miRNA,hsa-mir-6859-3,MIR6859-3,MIR6859-3,,ok,
+miRNA,hsa-mir-124-3,MIR124-3,MIR124-3,,ok,
+miRNA,hsa-mir-6826,MIR6826,MIR6826,,ok,
+miRNA,hsa-mir-3935,MIR3935,MIR3935,,ok,
+miRNA,hsa-mir-4472-1,MIR4472-1,MIR4472-1,,ok,
+miRNA,hsa-mir-3668,MIR3668,MIR3668,,ok,
+miRNA,hsa-mir-1289-2,MIR1289-2,MIR1289-2,,ok,
+miRNA,hsa-mir-3176,MIR3176,MIR3176,,ok,
+miRNA,hsa-mir-941-4,MIR941-4,MIR941-4,,ok,
+miRNA,hsa-mir-516a-1,MIR516A-1,MIR516A-1,,ok,
+miRNA,hsa-mir-8054,MIR8054,MIR8054,,ok,
+miRNA,hsa-mir-637,MIR637,MIR637,,ok,
+miRNA,hsa-mir-3929,MIR3929,MIR3929,,ok,
+miRNA,hsa-mir-3179-1,MIR3179-1,MIR3179-1,,ok,
+miRNA,hsa-mir-5691,MIR5691,MIR5691,,ok,
+miRNA,hsa-mir-4740,MIR4740,MIR4740,,ok,
+miRNA,hsa-mir-4461,MIR4461,MIR4461,,ok,
+miRNA,hsa-mir-8070,MIR8070,MIR8070,,ok,
+miRNA,hsa-mir-942,MIR942,MIR942,,ok,
+miRNA,hsa-mir-5586,MIR5586,MIR5586,,ok,
+miRNA,hsa-mir-466,MIR466,MIR466,,ok,
+miRNA,hsa-mir-2116,MIR2116,MIR2116,,ok,
+miRNA,hsa-mir-3662,MIR3662,MIR3662,,ok,
+miRNA,hsa-mir-21,MIR21,MIR21,,ok,
+miRNA,hsa-mir-3607,MIR3607,MIR3607,,ok,
+miRNA,hsa-mir-668,MIR668,MIR668,,ok,
+miRNA,hsa-mir-512-1,MIR512-1,MIR512-1,,ok,
+miRNA,hsa-mir-494,MIR494,MIR494,,ok,
+miRNA,hsa-mir-365a,MIR365A,MIR365A,,ok,
+miRNA,hsa-mir-6715b,MIR6715B,MIR6715B,,ok,
+miRNA,hsa-mir-520e,MIR520E,MIR520E,,ok,
+miRNA,hsa-mir-4517,MIR4517,MIR4517,,ok,
+miRNA,hsa-mir-885,MIR885,MIR885,,ok,
+miRNA,hsa-mir-520c,MIR520C,MIR520C,,ok,
+miRNA,hsa-mir-4468,MIR4468,MIR4468,,ok,
+miRNA,hsa-mir-4315-1,MIR4315-1,MIR4315-1,,ok,
+miRNA,hsa-mir-20a,MIR20A,MIR20A,,ok,
+miRNA,hsa-mir-4761,MIR4761,MIR4761,,ok,
+miRNA,hsa-mir-4728,MIR4728,MIR4728,,ok,
+miRNA,hsa-mir-140,MIR140,MIR140,,ok,
+miRNA,hsa-mir-6731,MIR6731,MIR6731,,ok,
+miRNA,hsa-mir-1262,MIR1262,MIR1262,,ok,
+miRNA,hsa-mir-769,MIR769,MIR769,,ok,
+miRNA,hsa-mir-181c,MIR181C,MIR181C,,ok,
+miRNA,hsa-mir-2355,MIR2355,MIR2355,,ok,
+miRNA,hsa-mir-548v,MIR548V,MIR548V,,ok,
+miRNA,hsa-mir-27a,MIR27A,MIR27A,,ok,
+miRNA,hsa-mir-6800,MIR6800,MIR6800,,ok,
+miRNA,hsa-mir-596,MIR596,MIR596,,ok,
+miRNA,hsa-mir-4509-1,MIR4509-1,MIR4509-1,,ok,
+miRNA,hsa-mir-548a-3,MIR548A-3,MIR548A-3,,ok,
+miRNA,hsa-mir-1285-2,MIR1285-2,MIR1285-2,,ok,
+miRNA,hsa-mir-4440,MIR4440,MIR4440,,ok,
+miRNA,hsa-mir-4435-2,MIR4435-2,MIR4435-2,,ok,
+miRNA,hsa-mir-548a-2,MIR548A-2,MIR548A-2,,ok,
+miRNA,hsa-mir-4676,MIR4676,MIR4676,,ok,
+miRNA,hsa-mir-4798,MIR4798,MIR4798,,ok,
+miRNA,hsa-mir-3616,MIR3616,MIR3616,,ok,
+miRNA,hsa-mir-5087,MIR5087,MIR5087,,ok,
+miRNA,hsa-mir-767,MIR767,MIR767,,ok,
+miRNA,hsa-mir-106b,MIR106B,MIR106B,,ok,
+miRNA,hsa-mir-642b,MIR642B,MIR642B,,ok,
+miRNA,hsa-mir-188,MIR188,MIR188,,ok,
+miRNA,hsa-mir-599,MIR599,MIR599,,ok,
+miRNA,hsa-mir-8071-1,MIR8071-1,MIR8071-1,,ok,
+miRNA,hsa-mir-490,MIR490,MIR490,,ok,
+miRNA,hsa-mir-6723,MIR6723,MIR6723,,ok,
+miRNA,hsa-mir-6757,MIR6757,MIR6757,,ok,
+miRNA,hsa-mir-5583-1,MIR5583-1,MIR5583-1,,ok,
+miRNA,hsa-mir-4273,MIR4273,MIR4273,,ok,
+miRNA,hsa-mir-1827,MIR1827,MIR1827,,ok,
+miRNA,hsa-mir-378a,MIR378A,MIR378A,,ok,
+miRNA,hsa-mir-4525,MIR4525,MIR4525,,ok,

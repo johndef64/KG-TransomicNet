@@ -1,0 +1,7 @@
+layer,label,n_sampled,n_audited,n_errors,error_rate_pct,n_unverifiable,coverage_pct,examples
+RNA-Seq,RNA-Seq (Ensembl/Entrez),100,70,0,0.0,30,70.0,no errors
+CNV,CNV (Entrez),0,0,0,0.0,0,0.0,no errors
+miRNA,miRNA (miRBase),100,100,0,0.0,0,100.0,no errors
+Methylation,Methylation (CpG/gene),0,0,0,0.0,0,0.0,no errors
+RPPA,RPPA (Entrez/HGNC),0,0,0,0.0,0,0.0,no errors
+Overall,Overall,200,170,0,0.0,30,85.0,---

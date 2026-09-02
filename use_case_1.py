@@ -674,10 +674,14 @@ def plot_hop_distance_scatter(hop_df: pd.DataFrame,
                     alpha=0.3, s=20, color=colors.get(str(hop), "grey"),
                     label=f"Hop {hop} (n={len(subset)})")
 
-    # Trend line: median per hop
+    # Trend lines: mean (monotone, the statistic reported in the text) and
+    # median (shown for completeness; it rises again at hop 3).
+    means = df.groupby("hop_distance")[corr_column].mean()
+    ax1.plot(means.index, means.values, "k-o", linewidth=2, markersize=8,
+             label="Mean", zorder=6)
     medians = df.groupby("hop_distance")[corr_column].median()
-    ax1.plot(medians.index, medians.values, "k-o", linewidth=2, markersize=8,
-             label="Median", zorder=5)
+    ax1.plot(medians.index, medians.values, "k--s", linewidth=1.2, markersize=6,
+             alpha=0.6, label="Median", zorder=5)
 
     ax1.set_xlabel("Semantic Distance (KG hops)", fontsize=12)
     ax1.set_ylabel(f"Pearson r ({corr_column.replace('corr_', '')})", fontsize=12)
@@ -1004,11 +1008,21 @@ def plot_publication_figure(results_by_group: Dict[str, pd.DataFrame],
                     label=f"Hop {int(hop)} (n={len(sub)})",
                 )
 
+            # Both central tendencies are drawn: the decay is monotone on the
+            # mean (0.138 -> 0.076 -> 0.070) but not on the median, which rises
+            # again at hop 3. The text reports the mean, so the figure must show
+            # it rather than leaving the reader to infer it from the median.
+            means = df_c.groupby("hop_distance")["corr_mrna"].mean()
+            ax_c.plot(
+                means.index.values, means.values,
+                color="black", marker="o", markersize=5, linewidth=1.6,
+                zorder=6, label="Mean",
+            )
             medians = df_c.groupby("hop_distance")["corr_mrna"].median()
             ax_c.plot(
                 medians.index.values, medians.values,
-                color="black", marker="o", markersize=5, linewidth=1.3,
-                zorder=5, label="Median",
+                color="black", marker="s", markersize=4, linewidth=1.0,
+                linestyle="--", alpha=0.6, zorder=5, label="Median",
             )
 
             # Overlay narrow boxplots at each hop position for distribution summary

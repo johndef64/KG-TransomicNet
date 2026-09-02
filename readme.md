@@ -2,6 +2,8 @@
 
 [![python](https://img.shields.io/badge/Python-3.10-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org) [![ArangoDB](https://img.shields.io/badge/ArangoDB-3.11%2B-DDE072?logo=arangodb&logoColor=black)](https://www.arangodb.com/) [![PheKnowLator](https://img.shields.io/badge/PheKnowLator-v3.0.2-blue?logo=zenodo&logoColor=white)](https://doi.org/10.5281/zenodo.7051238) [![TCGA / TARGET](https://img.shields.io/badge/TCGA%20%7C%20TARGET-GDC%20Portal-blueviolet?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMiAyQzYuNDggMiAyIDYuNDggMiAxMnM0LjQ4IDEwIDEwIDEwIDEwLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyem0xIDE1aC0ydi02aDJ2NnptMC04aC0yVjdoMnYyeiIvPjwvc3ZnPg==)](https://portal.gdc.cancer.gov/) ![Multi-omics](https://img.shields.io/badge/multi--omics-5%20layers-brightgreen) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21629418.svg)](https://doi.org/10.5281/zenodo.21629418) [![Hugging Face Dataset](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-database-FFD21E)](https://huggingface.co/datasets/johndef64/KG-TransomicNet) ![Database size](https://img.shields.io/badge/database-11.4%20GB%20%7C%2012M%20documents-informational)
+
 
 <!-- ![Status](https://img.shields.io/badge/Status-under%20review-orange) 
 [![PheKnowLator](https://zenodo.org/badge/DOI/10.5281/zenodo.7051238.svg)](https://doi.org/10.5281/zenodo.7051238)
@@ -12,6 +14,15 @@
 KG-TransomicNet couples a PheKnowLator-derived ontology backbone with per-sample TCGA/TARGET multi-omic measurements inside a single ArangoDB property graph. The semantic layer (≈780k entities, ≈11M typed relations from the OBO Foundry and Relation Ontology) and the quantitative layer (16,938 samples across 42 projects, five omic modalities at native precision) are deterministically joined through controlled mapping keys, so that ontology-grounded queries return per-sample numerical vectors without application-side joins.
 
 The framework is application-agnostic and meant to be reused as the upstream substrate for downstream graph machine-learning pipelines (heterogeneous GNNs, KG embeddings, link prediction).
+
+**You do not have to build the database to use it.** The materialised instance is published as an ArangoDB dump on Hugging Face — [`johndef64/KG-TransomicNet`](https://huggingface.co/datasets/johndef64/KG-TransomicNet) — so a working copy is two commands away instead of a ~4 hour pipeline:
+
+```bash
+python scripts/db_dump.py download --out ./kg-dump
+python scripts/db_dump.py restore --input ./kg-dump --db PKT_main --create
+```
+
+Both commands verify document counts and refuse to report success on a mismatch. See [§3c](#3c-restoring-the-database-instead-of-rebuilding-it).
 
 ![Framework architecture](figures/graphical_abstract.png)
 
@@ -170,7 +181,10 @@ Full build on the reference machine (4 cores, 34 GB RAM, ArangoDB 3.11.8):
 
 [`scripts/db_dump.py`](scripts/db_dump.py) creates, verifies, restores and
 downloads a dump of the materialised instance — backbone and quantitative
-layers together — so the results can be reproduced without the ~4 hour build:
+layers together — so the results can be reproduced without the ~4 hour build.
+The published dump lives on Hugging Face at
+[`johndef64/KG-TransomicNet`](https://huggingface.co/datasets/johndef64/KG-TransomicNet):
+12,010,793 documents, 5.74 GB compressed, 11.4 GB restored.
 
 ```bash
 python scripts/db_dump.py download --out ./kg-dump          # fetch published dump
@@ -300,6 +314,17 @@ The classification of output files (R = result, C = plot cache, F = figure) and 
 ## Citation
 
 De Filippis, G. M., Rinaldi, A. M. *Modeling Omics with Semantics for Dynamic Construction of Knowledge-Based Trans-Omic Networks.* (under review).
+
+Software: <https://doi.org/10.5281/zenodo.21629418> — the concept DOI, which
+always resolves to the latest release. Cite a specific version from the
+*Versions* panel on that record if you need to pin one.
+
+Materialised database:
+<https://huggingface.co/datasets/johndef64/KG-TransomicNet>
+
+Please also cite TCGA/TARGET and PheKnowLator, whose data this resource
+redistributes in reorganised form; the underlying molecular data remain
+subject to the NIH Genomic Data Sharing policy and the GDC data-use terms.
 
 ## License
 

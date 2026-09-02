@@ -100,8 +100,14 @@ def connect(db_name, host, user, password):
     return client.db(db_name, username=user, password=password)
 
 
-def load_index_mappings(db, collection, index_key, mapping_field):
-    """Return the list of mapping dicts from a *_index document."""
+def load_index_mappings(db, collection, index_key, mapping_field, required=True):
+    """Return the list of mapping dicts from a *_index document.
+
+    Layer coverage is uneven across the corpus: only 11 of the 42 projects carry
+    all five layers. A cohort never profiled on a platform simply has no index
+    for it, which is a property of the data rather than an error, so with
+    required=False the caller gets None and skips that layer.
+    """
     aql = f"""
     FOR doc IN {collection}
         FILTER doc._key == @key
@@ -109,6 +115,8 @@ def load_index_mappings(db, collection, index_key, mapping_field):
     """
     res = list(db.aql.execute(aql, bind_vars={"key": index_key}))
     if not res or not res[0]:
+        if not required:
+            return None
         raise RuntimeError(
             f"Index '{index_key}' not found / empty in collection '{collection}'."
         )
@@ -473,7 +481,10 @@ def main():
     print("[2/3] Auditing layers...")
     all_rows = []
     for layer, coll, key, field in layer_specs:
-        maps = load_index_mappings(db, coll, key, field)
+        maps = load_index_mappings(db, coll, key, field, required=False)
+        if maps is None:
+            print(f"      {layer:<12}: not profiled in {co}, skipped")
+            continue
         if layer in ("RNA-Seq", "CNV"):
             rows = audit_gene_layer(db, maps, args.n, rng, ensg2entrez, layer)
         elif layer == "RPPA":
