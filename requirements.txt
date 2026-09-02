@@ -24,6 +24,9 @@ requests>=2.31
 pyarrow>=14.0            # Parquet baseline in bench_schema.py
 psutil>=5.9              # machine specs recorded in environment.json
 
+# Optional — only for `db_dump.py download`
+huggingface_hub>=0.20
+
 # Optional — provenance scripts under scripts/mapping/, not part of the
 # pipeline. Install only to regenerate the shipped mapping tables.
 pybiomart>=0.2.0

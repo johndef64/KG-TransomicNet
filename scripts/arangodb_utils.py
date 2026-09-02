@@ -2455,7 +2455,11 @@ if __name__ == "__main__":
 
 
 #%%
-list_databases()
+# Interactive cell, not run on import: this module is imported by every script
+# in the pipeline, and a bare call here makes each of them hit the server just
+# to be imported (and print a database listing before doing anything).
+if __name__ == "__main__":
+    list_databases()
 #%%
 # rename_database('PKT_main', 'PKT_transomics_v1')
 # #%%

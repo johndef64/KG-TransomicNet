@@ -166,6 +166,33 @@ Full build on the reference machine (4 cores, 34 GB RAM, ArangoDB 3.11.8):
 **42 projects in 231 minutes**, mean 337 s per project (26 s download,
 154 s build, 157 s load).
 
+### 3c. Restoring the database instead of rebuilding it
+
+[`scripts/db_dump.py`](scripts/db_dump.py) creates, verifies, restores and
+downloads a dump of the materialised instance — backbone and quantitative
+layers together — so the results can be reproduced without the ~4 hour build:
+
+```bash
+python scripts/db_dump.py download --out ./kg-dump          # fetch published dump
+python scripts/db_dump.py restore  --input ./kg-dump --db PKT_main --create
+python scripts/db_dump.py dump     --out ./kg-dump --db PKT_main   # produce one
+python scripts/db_dump.py verify   --input ./kg-dump         # check one you have
+```
+
+Every command **counts documents** and refuses to report success on a mismatch.
+This is not belt-and-braces: a dump of this database can fail silently, exiting
+0 with intact gzip streams and a valid last line while missing thousands of
+documents, and restoring it yields an instance that looks healthy but
+under-reports a layer. `dump` writes a manifest of expected counts that
+`restore` and `verify` check against.
+
+Do not write a dump into a cloud-synced folder (Google Drive, Dropbox,
+OneDrive) — the sync client rewrites files while they are being written, which
+is one way to produce exactly that silent truncation. `dump` refuses such paths
+unless given `--allow-synced-dir`.
+
+Downloading needs `pip install huggingface_hub`.
+
 ### 4. (Optional) Trans-omic networks and database statistics
 
 ```bash
