@@ -20,8 +20,9 @@ from __future__ import annotations
 import argparse
 import time
 
-from bench_common import (SCRATCH_DB, collection_figures, connect, drop_scratch,
-                          make_scratch, write_csv, write_env)
+from bench_common import (SCRATCH_DB, add_db_argument, collection_figures,
+                          connect, drop_scratch, make_scratch, write_csv,
+                          write_env)
 
 COHORT = "TCGA-BRCA"
 BATCH_SIZES = [100, 500, 1000, 2500, 5000, 10000]
@@ -61,10 +62,11 @@ def main() -> None:
     ap.add_argument("--n-nodes", type=int, default=100_000)
     ap.add_argument("--n-vectors", type=int, default=300)
     ap.add_argument("--keep", action="store_true")
+    add_db_argument(ap)
     args = ap.parse_args()
 
     write_env()
-    db = connect()
+    db = connect(args.db)
 
     print(f"[fetching {args.n_nodes:,} backbone documents]")
     nodes = fetch_nodes(db, args.n_nodes)

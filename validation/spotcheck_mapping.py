@@ -39,7 +39,7 @@ Usage
 -----
   conda run -n gnn python validation/spotcheck_mapping.py
   conda run -n gnn python validation/spotcheck_mapping.py --n 100 --seed 42 \
-      --db PKT_TransomicNet_v3 --cohort TCGA-BRCA
+      --db PKT_main --cohort TCGA-BRCA
 """
 
 import argparse
@@ -439,7 +439,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--n", type=int, default=100, help="audited mappings per layer")
     ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--db", default="PKT_TransomicNet_v3")
+    ap.add_argument("--db", default="PKT_main")
     ap.add_argument("--cohort", default="TCGA-BRCA")
     ap.add_argument("--host", default="http://localhost:8529")
     ap.add_argument("--user", default="root")

@@ -22,7 +22,7 @@ CLI flags:
   --skip-analysis    Regenerate plots from cached CSVs (no DB connection).
   --random-seeds     Resample the hop-distance seed genes at runtime instead
                      of using the pinned SEED_GENES_HOP_PUBLISHED list.
-  --db NAME          ArangoDB database name (default: PKT_TransomicNet_v3).
+  --db NAME          ArangoDB database name (default: PKT_main).
   --cohort COHORT    TCGA cohort (default: TCGA-BRCA).
   --host URL         ArangoDB host (default: http://localhost:8529).
   --user USER        ArangoDB user (default: root).
@@ -65,7 +65,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
-DB_NAME = "PKT_TransomicNet_v3"
+DB_NAME = "PKT_main"
 COHORT = "TCGA-BRCA"
 
 # Predicate groups to test — each requires a different extraction strategy

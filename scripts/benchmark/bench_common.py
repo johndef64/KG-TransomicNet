@@ -25,7 +25,7 @@ from arango.http import DefaultHTTPClient
 HOST = "http://localhost:8529"
 USER = "root"
 PASSWORD = "avocadodb"
-DB_NAME = "PKT_TransomicNet_v3"
+DB_NAME = "PKT_main"
 SCRATCH_DB = "BENCH_scratch"
 
 HTTP_TIMEOUT = 3600  # bulk pulls and index builds exceed the 60 s default
@@ -40,6 +40,13 @@ def client() -> ArangoClient:
 
 def connect(db_name: str = DB_NAME):
     return client().db(db_name, username=USER, password=PASSWORD)
+
+
+def add_db_argument(parser):
+    """Give a benchmark script the same --db flag as the rest of the pipeline."""
+    parser.add_argument("--db", default=DB_NAME,
+                        help=f"ArangoDB database name (default: {DB_NAME}).")
+    return parser
 
 
 def sys_db():

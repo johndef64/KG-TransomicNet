@@ -25,7 +25,8 @@ from __future__ import annotations
 import argparse
 import time
 
-from bench_common import connect, time_query, write_csv, write_env
+from bench_common import (add_db_argument, connect, time_query, write_csv,
+                          write_env)
 
 COHORT = "TCGA-BRCA"
 REPEATS = 10
@@ -196,9 +197,10 @@ def main() -> None:
                     help="create the Section 3.5 indexes and re-run the suite")
     ap.add_argument("--drop-created-indexes", action="store_true",
                     help="remove only the indexes this script created, then exit")
+    add_db_argument(ap)
     args = ap.parse_args()
 
-    db = connect()
+    db = connect(args.db)
 
     if args.drop_created_indexes:
         drop_created_indexes(db)

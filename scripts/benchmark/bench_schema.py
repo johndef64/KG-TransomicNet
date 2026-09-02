@@ -33,8 +33,9 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from bench_common import (SCRATCH_DB, collection_figures, connect, drop_scratch,
-                          make_scratch, write_csv, write_env)
+from bench_common import (SCRATCH_DB, add_db_argument, collection_figures,
+                          connect, drop_scratch, make_scratch, write_csv,
+                          write_env)
 
 COHORT = "TCGA-BRCA"
 TMP_DIR = Path(__file__).resolve().parent / "_tmp_parquet"
@@ -191,10 +192,11 @@ def main() -> None:
     ap.add_argument("--genes", type=int, default=2000)
     ap.add_argument("--kset", type=int, default=200)
     ap.add_argument("--keep", action="store_true", help="do not drop the scratch DB")
+    add_db_argument(ap)
     args = ap.parse_args()
 
     write_env()
-    db = connect()
+    db = connect(args.db)
     print(f"[fetching {args.genes} genes x all BRCA samples from the live instance]")
     mappings, samples, values = fetch_matrix(db, args.genes)
     G, S = len(mappings), len(samples)

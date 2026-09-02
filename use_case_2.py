@@ -25,7 +25,7 @@ Visualizations:
 
 CLI flags:
   --skip-analysis    Regenerate plots from cached CSVs (no DB connection).
-  --db NAME          ArangoDB database name (default: PKT_TransomicNet_v3).
+  --db NAME          ArangoDB database name (default: PKT_main).
   --cohort COHORT    TCGA cohort (default: TCGA-BRCA).
   --host URL         ArangoDB host (default: http://localhost:8529).
   --user USER        ArangoDB user (default: root).
@@ -85,7 +85,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
-DB_NAME = "PKT_TransomicNet_v3"
+DB_NAME = "PKT_main"
 COHORT = "TCGA-BRCA"
 
 # Correlation thresholds for classification

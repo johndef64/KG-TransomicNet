@@ -6,7 +6,10 @@ import json
 import traceback
 
 # --- CONFIGURAZIONE ---
-db_name = 'PKT_TransomicNet_v3'
+# Default database name, matching the one documented in the README and used by
+# the loaders. Point the scripts at a differently named local instance with
+# their --db flag rather than editing this value.
+db_name = 'PKT_main'
 arangodb_hosts = 'http://localhost:8529'
 arangodb_user = 'root'
 arangodb_password = 'avocadodb'
@@ -23,22 +26,34 @@ class TimeoutHTTPClient(DefaultHTTPClient):
 
 # --- FUNZIONI DI BASE DI ARANGODB ---
 
-def setup_arangodb_connection(db_name = db_name):
-    """Setup ArangoDB connection and create database if needed"""
+def setup_arangodb_connection(db_name = db_name, create = False):
+    """Setup ArangoDB connection.
+
+    By default the database must already exist: creating it on demand would let
+    a reader silently connect to an empty database and report no results, which
+    is indistinguishable from a genuinely empty answer. Only the loaders, which
+    legitimately populate a new instance, pass create=True.
+    """
     print(f"🔌 Setting up ArangoDB connection to {arangodb_hosts}...")
     try:
         client = ArangoClient(hosts=arangodb_hosts, http_client=TimeoutHTTPClient())
-        
+
         # Connetti prima al database di sistema
         sys_db = client.db('_system', username=arangodb_user, password=arangodb_password)
-        
-        # Crea database se non esiste
+
         if not sys_db.has_database(db_name):
+            if not create:
+                # Deliberately ASCII: this message must survive a cp1252 console,
+                # otherwise the UnicodeEncodeError hides the actual diagnosis.
+                print(f"[ERROR] Database '{db_name}' does not exist on {arangodb_hosts}.")
+                print(f"        Load it first (see README steps 2-3), or pass --db "
+                      f"with the name of an existing database.")
+                return None
             sys_db.create_database(db_name)
             print(f"✓ Created database: {db_name}")
         else:
             print(f"Database {db_name} already exists")
-        
+
         # Connetti al database di destinazione
         db = client.db(db_name, username=arangodb_user, password=arangodb_password)
         print(f"✓ Connected to database: {db_name}")
@@ -1031,7 +1046,7 @@ def visualize_random_graph(db_connection,
         traceback.print_exc()
         return None
 
-def open_arango_web_viewer(graph_name='PKT_graph', host='localhost', port=8529, db_name='PKT_TransomicNet_v3'):
+def open_arango_web_viewer(graph_name='PKT_graph', host='localhost', port=8529, db_name=db_name):
     """Open ArangoDB web interface graph viewer in browser"""
     import webbrowser
     
@@ -2442,14 +2457,14 @@ if __name__ == "__main__":
 #%%
 list_databases()
 #%%
-# rename_database('PKT_TransomicNet_v3', 'PKT_transomics_v1')
+# rename_database('PKT_main', 'PKT_transomics_v1')
 # #%%
 # name = "PKT_transomics_v1"
 # delete_database(name)
 # #%%
-# dump_database("PKT_TransomicNet_v3", include_system=False)
+# dump_database("PKT_main", include_system=False)
 # #%%
-# restore_database_from_dump("./dumps/PKT_TransomicNet_v3_20240605_123456", target_db_name="PKT_transomics_v1", overwrite=True)
+# restore_database_from_dump("./dumps/PKT_main_20240605_123456", target_db_name="PKT_transomics_v1", overwrite=True)
 #%%
 
 # --- MAIN DI TEST ---

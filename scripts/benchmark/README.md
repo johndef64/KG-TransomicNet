@@ -13,7 +13,12 @@ pip install python-arango pyarrow psutil
 
 A running ArangoDB instance holding the deployed database. Connection
 parameters are at the top of `bench_common.py` (defaults: `localhost:8529`,
-database `PKT_TransomicNet_v3`).
+database `PKT_main`). Every script accepts `--db` to target a differently
+named instance without editing the sources:
+
+```bash
+python scripts/benchmark/bench_storage.py --db MY_DATABASE
+```
 
 ## Scripts
 

@@ -34,7 +34,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from bench_common import DB_NAME, RESULTS_DIR, collection_figures, connect
+from bench_common import (DB_NAME, RESULTS_DIR, add_db_argument,
+                          collection_figures, connect)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = PROJECT_ROOT / "scripts"
@@ -93,11 +94,11 @@ def run_stage(script: str, study: str, extra: list[str] | None = None,
     return True, dt, ""
 
 
-def db_total_mb() -> float:
+def db_total_mb(db_name: str = DB_NAME) -> float:
     total = 0.0
     for c in list(LAYER_COLLECTIONS) + ["SAMPLES", "CASES", "PROJECTS", "GENES"]:
         try:
-            f = collection_figures(DB_NAME, c)
+            f = collection_figures(db_name, c)
             total += (f["documents_bytes"] + f["indexes_bytes"]) / 1e6
         except Exception:
             pass
@@ -146,6 +147,7 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--no-cleanup", action="store_true",
                     help="keep raw downloads and intermediate JSON")
+    add_db_argument(ap)
     args = ap.parse_args()
 
     all_studies = args.studies or study_lists()
@@ -159,8 +161,8 @@ def main() -> None:
             print("  ", s)
         return
 
-    db = connect()
-    before_total = db_total_mb()
+    db = connect(args.db)
+    before_total = db_total_mb(args.db)
     log(f"database quantitative footprint at start: {before_total:,.1f} MB")
 
     for i, study in enumerate(todo, 1):
@@ -194,9 +196,10 @@ def main() -> None:
             continue
         log(f"    built in {dt:.0f}s ({len(built)} layer files)")
 
-        # The loader defaults to --db PKT_main; target the reference instance.
+        # Pass the database name explicitly rather than relying on the loader's
+        # own default, so both stay in step if either is pointed elsewhere.
         ok, dt, err = run_stage("load_omics_collections_to_arangodb.py", study,
-                                extra=["--db", DB_NAME])
+                                extra=["--db", args.db])
         row["load_s"] = round(dt, 1)
         if not ok:
             log(f"    load FAILED: {err}")

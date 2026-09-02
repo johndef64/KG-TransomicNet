@@ -6,10 +6,13 @@ documents and indexes, grouped into the semantic backbone and the five
 quantitative layers.
 
     python scripts/benchmark/bench_storage.py
+    python scripts/benchmark/bench_storage.py --db MY_DATABASE
 """
 from __future__ import annotations
 
-from bench_common import (DB_NAME, collection_figures, connect,
+import argparse
+
+from bench_common import (add_db_argument, collection_figures, connect,
                           list_collections, write_csv, write_env)
 
 BACKBONE = {"nodes", "edges"}
@@ -40,12 +43,13 @@ def layer_breakdown(db, collection: str) -> dict:
 
 
 def main() -> None:
-    db = connect()
+    args = add_db_argument(argparse.ArgumentParser()).parse_args()
+    db = connect(args.db)
     write_env()
 
     rows = []
-    for name in list_collections(DB_NAME):
-        fig = collection_figures(DB_NAME, name)
+    for name in list_collections(args.db):
+        fig = collection_figures(args.db, name)
         if name in BACKBONE:
             group = "semantic_backbone"
         elif name in LAYERS:

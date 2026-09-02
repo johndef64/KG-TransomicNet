@@ -50,10 +50,30 @@ Schema details, collection fields, and the AQL query pattern are documented in [
   it goes) or **~29 GB** building everything in one pass.
 
 ```bash
-pip install -r requiremets.txt
+pip install -r requirements.txt
 ```
 
-Configure the ArangoDB connection (host, credentials, database name) in [scripts/arangodb_utils.py](scripts/arangodb_utils.py) before running any script.
+Configure the ArangoDB host and credentials in
+[scripts/arangodb_utils.py](scripts/arangodb_utils.py) before running any
+script; the benchmarks keep their own copy at the top of
+[scripts/benchmark/bench_common.py](scripts/benchmark/bench_common.py). The
+loaders also accept `--host`, `--user` and `--password` on the command line.
+The database name is not configured here — see below.
+
+### Database name
+
+Every script — loaders, use cases, benchmarks, validation — defaults to the
+database **`PKT_main`**. To work against a differently named instance, pass
+`--db` rather than editing the sources, so the two never drift apart:
+
+```bash
+python use_case_1.py --db MY_DATABASE
+```
+
+Only the loaders of steps 2 and 3 create the database if it does not exist.
+Every other script fails with an explicit message instead: connecting to a
+missing database would create an empty one, and empty results are
+indistinguishable from a query that legitimately found nothing.
 
 ## What ships with the repo and what does not
 
@@ -133,8 +153,9 @@ already recorded as `ok` are skipped.
 
 Two notes for reproducibility:
 
-- The loader defaults to `--db PKT_main`; `run_all_cohorts.py` passes the
-  database name explicitly, so set it there if you use a different one.
+- Every script defaults to the database `PKT_main` (see *Database name* below);
+  `run_all_cohorts.py` passes it explicitly, so change it there too if you use
+  a different one.
 - `build_omics_collections.py` logs `[OK] finished` and exits 0 even when a
   project raised, so exit status alone is not evidence of success.
   `run_all_cohorts.py` therefore verifies that the expected
@@ -148,9 +169,8 @@ Full build on the reference machine (4 cores, 34 GB RAM, ArangoDB 3.11.8):
 ### 4. (Optional) Trans-omic networks and database statistics
 
 ```bash
-python scripts/build_kg_transomics.py        # per-sample trans-omic subgraph
-python scripts/build_transomic_network.py    # cohort-level trans-omic network
-python scripts/analyze_kg_transomics.py     # subgraph descriptive statistics
+python scripts/build_transomic_network.py    # per-sample trans-omic subgraph
+python scripts/analyze_kg_transomics.py      # subgraph descriptive statistics
 ```
 
 ## Reproducing the benchmarks
@@ -240,7 +260,6 @@ The classification of output files (R = result, C = plot cache, F = figure) and 
 │   ├── load_graph_to_arangodb.py
 │   ├── build_omics_collections.py
 │   ├── load_omics_collections_to_arangodb.py
-│   ├── build_kg_transomics.py
 │   ├── build_transomic_network.py
 │   ├── analyze_kg_transomics.py
 │   └── arangodb_utils.py

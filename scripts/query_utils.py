@@ -485,7 +485,7 @@ Unique values for 'class_code' in 'nodes':
 #%%
 if __name__ == "__main__":
     from arangodb_utils import *
-    db_connection = setup_arangodb_connection("PKT_TransomicNet_v3")
+    db_connection = setup_arangodb_connection("PKT_main")
 
     node_class_code = get_key_value_counts(db_connection, "nodes", "class_code")
 

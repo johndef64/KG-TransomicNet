@@ -13,7 +13,7 @@ Usage
     python scripts/load_graph_to_arangodb.py
 
     # Custom database name and JSON directory
-    python scripts/load_graph_to_arangodb.py --db PKT_TransomicNet_v3 \\
+    python scripts/load_graph_to_arangodb.py --db PKT_main \\
         --input-dir data/pkt/builds/v3.0.2/property_graph/sample_20260514_120000
 
     # Load from a graph-format JSON file (single file with 'nodes' and 'edges' keys)
@@ -405,7 +405,9 @@ if __name__ == "__main__":
     arangodb_utils.arangodb_user = args.user
     arangodb_utils.arangodb_password = args.password
     from arangodb_utils import setup_arangodb_connection
-    db = setup_arangodb_connection(args.db)
+    # This is a loader: it legitimately populates a fresh instance, so it is the
+    # one place allowed to create the database if it is not there yet.
+    db = setup_arangodb_connection(args.db, create=True)
     if db is None:
         sys.exit("[ERROR] Failed to connect to ArangoDB. Is the server running?")
 
@@ -445,7 +447,7 @@ if __name__ == "__main__":
 
 """
 
-Knowledge Graph in PKT_TransomicNet_v3:
+Knowledge Graph in PKT_main:
 - collection: nodes
   properties: _key, uri, namespace, entity_id, class_code, label, bioentity_type, description, synonym, source, source_type, integer_id, entrez_id, uniprot_id, rsid, mondo_id, hp_id
 

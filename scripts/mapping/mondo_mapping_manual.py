@@ -21,7 +21,7 @@ import pandas as pd
 
 # NOTE: this line connects to ArangoDB at import time.
 # Commented out to allow the file to be imported / inspected without a DB.
-# db_connection = setup_arangodb_connection("PKT_TransomicNet_v3")
+# db_connection = setup_arangodb_connection("PKT_main")
 
 # funzioni per caricare multi omics datasets
 TCGA_STUDIES = [
