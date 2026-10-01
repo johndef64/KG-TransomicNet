@@ -131,3 +131,49 @@ results/benchmark/SUMMARY.md
 !data/mappings/biomart_ensg_enst_mapping.tsv.zip
 !data/mappings/rsid_checkpoint.tsv.zip
 !data/mappings/mirna_hgcn_map.tsv.zip
+
+# View P (PanCanAtlas): virtual loading statistics, kept local
+scripts/stats/view_p_*
+
+# Local working files (not part of the release)
+LOCAL_DEV.md
+albero-della-repo.md
+readme_old.md
+use_case_readme.md
+kg_schema_report.*
+get_pancan_dataset.py
+scripts_v1_ita.zip
+vscode.bat
+figures/image_*.png
+scripts/.pybiomart.sqlite
+scripts/TCGA_LOADER_README.md
+scripts/collection_examples.py
+scripts/debug_methylation.py
+scripts/kg_transomics_aql_query.md
+scripts/stats/
+validation/REPORT_*.md
+validation/*.tex
+data/owl/
+data/quantitative-onto/
+data/pkt/builds/sampler*.py
+data/pkt/builds/v3.0.2/LabelClassDataset_example.csv
+data/pkt/builds/v3.0.2/PKT_NodeLabels_*
+data/pkt/builds/v3.0.2/*.txt.zip
+data/pkt/edges.zip
+data/pkt/nodes.tsv
+data/pkt/graph_statistics.tsv
+data/pkt/property_graph_schema.json
+data/pkt/scripts.zip
+
+# Mappings: only the curated tables shipped with the release are tracked.
+# Everything else under data/mappings/ (unzipped copies, scratch, backups) stays local.
+data/mappings/*
+!data/mappings/README.md
+!data/mappings/TCPA_RPPA500_metadata_mapping.tsv
+!data/mappings/biomart_ensg_enst_mapping.tsv.zip
+!data/mappings/biomart_gene_mappings_filled.zip
+!data/mappings/biomart_gene_mappings_filled_extended.tsv.zip
+!data/mappings/mirna_hgcn_map.tsv.zip
+!data/mappings/mondo_to_primarydisease.tsv
+!data/mappings/rsid_checkpoint.tsv.zip
+!data/mappings/hgcn_mart_conversion_table.zip

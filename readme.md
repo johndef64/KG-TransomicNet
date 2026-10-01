@@ -49,7 +49,7 @@ Full instance: **11.4 GB**, of which 2.4 GB backbone and 9.0 GB quantitative
 layers holding 1.70 × 10⁹ measurements in 50,509 per-sample vector documents
 plus 158 cohort index documents.
 
-Schema details, collection fields, and the AQL query pattern are documented in [docs/readme_db_structure.md](docs/readme_db_structure.md).
+Schema details, collection fields, and the AQL query pattern are documented in [DATABASE.md](DATABASE.md).
 
 ## Requirements
 
@@ -206,6 +206,23 @@ is one way to produce exactly that silent truncation. `dump` refuses such paths
 unless given `--allow-synced-dir`.
 
 Downloading needs `pip install huggingface_hub`.
+
+### 3d. (Optional) PanCanAtlas view
+
+Besides the per-study GDC data, the quantitative layer can host the harmonised
+**TCGA PanCanAtlas 2018** release (EB++ RNA-seq, EB miRNA, GISTIC2 gene-level
+CNV, iCluster subtype labels) as one more cohort, `PANCAN-ATLAS`, with the same
+vector + index schema. The view is additive: it is written to its own folder and
+never touches GDC files or documents.
+
+```bash
+python scripts/pancan_atlas/download_pancan_atlas.py
+python scripts/pancan_atlas/build_pancan_atlas_collections.py --limit-samples 50 --verify   # quick test
+python scripts/pancan_atlas/build_pancan_atlas_collections.py                               # full build, ~3.4 GB JSON
+```
+
+Sources, document fields, loading notes and statistics of the view are in
+[scripts/pancan_atlas/README.md](scripts/pancan_atlas/README.md).
 
 ### 4. (Optional) Trans-omic networks and database statistics
 
