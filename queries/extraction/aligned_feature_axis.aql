@@ -1,0 +1,27 @@
+// aligned_feature_axis -- features shared by two layers of a cohort, with their positions.
+//
+// Intersects the identifiers of two cohort indexes on the chosen field and
+// returns, for every shared identifier, its position in each layer. Use the
+// original row identifier ("source_id") to align matrices exactly as they were
+// distributed, or a normalised one ("entrez_id", "hgnc_symbol") to align on
+// resolved genes.
+//
+// Bind variables
+//   @index_a, @index_b   index handles, e.g. "GENE_EXPRESSION/expr_index_PANCAN-ATLAS",
+//                        "CNV/cnv_index_PANCAN-ATLAS"
+//   @mapping             mapping array field (same in both), e.g. "gene_mappings"
+//   @id_field            identifier used for the alignment
+// Returns {id, pos_a, pos_b} sorted by pos_a. An identifier repeated in layer a
+// (a duplicated row of the source matrix) is returned once per row; de-duplication
+// is left to the downstream pipeline.
+
+LET a = DOCUMENT(@index_a)[@mapping]
+LET b = (FOR m IN DOCUMENT(@index_b)[@mapping] FILTER m[@id_field] != null RETURN m)
+// identifier -> position in layer b, built in linear time
+LET pos_b = ZIP((FOR m IN b RETURN TO_STRING(m[@id_field])), (FOR m IN b RETURN m.position))
+FOR m IN a
+  FILTER m[@id_field] != null
+  LET pb = pos_b[TO_STRING(m[@id_field])]
+  FILTER pb != null
+  SORT m.position
+  RETURN {id: m[@id_field], pos_a: m.position, pos_b: pb}

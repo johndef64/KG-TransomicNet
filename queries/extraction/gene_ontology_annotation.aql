@@ -1,0 +1,53 @@
+// gene_ontology_annotation -- gene -> GO term annotations through the protein bridge.
+//
+// GO terms are anchored to proteins, not genes, in the backbone, so the gene is
+// joined to its products first and the protein is then collapsed: it is not
+// returned. The gene--protein bridge is asserted in both directions
+// ("has gene product" gene -> protein, "gene product of" protein -> gene) and
+// both are followed.
+//
+// Two rules make the extraction deterministic:
+//   one gene per protein   a protein linked to several genes is assigned to the
+//                          gene of its last bridge edge in stored order;
+//                          set @one_gene_per_protein = false to keep all genes;
+//   minimum support        a term is kept only if at least @min_support rows
+//                          (gene annotations) point to it.
+//
+// Bind variables
+//   @panel                  list of Entrez IDs
+//   @annotation_predicates  e.g. ["participates in", "has function", "located_in"]
+//   @min_support            e.g. 3
+//   @one_gene_per_protein   true | false
+// Returns {gene, term} in stored edge order (one row per protein -> GO edge).
+
+LET rows = (
+  FOR entrez IN @panel
+    LET g = DOCUMENT(CONCAT("nodes/", entrez))
+    FILTER g != null AND g.class_code == "EntrezID"
+    LET proteins = UNION_DISTINCT(
+      (FOR p, e IN 1..1 OUTBOUND g edges
+         FILTER p.class_code == "PR" AND e.predicate_label == "has gene product" RETURN p._id),
+      (FOR p, e IN 1..1 INBOUND g edges
+         FILTER p.class_code == "PR" AND e.predicate_label == "gene product of" RETURN p._id))
+    FOR pid IN proteins
+      LET owner = LAST(
+        FOR q, e IN 1..1 ANY pid edges
+          FILTER q.class_code == "EntrezID"
+             AND ((e.predicate_label == "has gene product" AND e._to == pid)
+               OR (e.predicate_label == "gene product of" AND e._from == pid))
+          SORT TO_NUMBER(SUBSTRING(e._key, 5))
+          RETURN q.entity_id)
+      FILTER NOT @one_gene_per_protein OR owner == g.entity_id
+      FOR t, e2 IN 1..1 OUTBOUND pid edges
+        FILTER t.class_code == "GO" AND e2.predicate_label IN @annotation_predicates
+        RETURN {gene: g.entity_id, term: t.entity_id, ord: TO_NUMBER(SUBSTRING(e2._key, 5))})
+
+LET kept = (FOR r IN rows
+              COLLECT term = r.term WITH COUNT INTO n
+              FILTER n >= @min_support
+              RETURN term)
+
+FOR r IN rows
+  FILTER r.term IN kept
+  SORT r.ord
+  RETURN {gene: r.gene, term: r.term}

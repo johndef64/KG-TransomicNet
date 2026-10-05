@@ -1,0 +1,41 @@
+// 01 -- Two-step retrieval: semantic seed -> cohort index -> per-sample vectors.
+// The basic pattern of the data model. Starting from a phenotype, collect the
+// genes linked to it causally or through the diseases that present it, resolve
+// their positions in the cohort index, and slice every expression vector at
+// those positions. Traversals are predicate-constrained: an unconstrained
+// two-hop expansion reaches the class hubs of the ontology and grows without
+// bound.
+//
+// Bind variables
+//   @seed        phenotype node handle, e.g. "nodes/HP_0003002" (Breast carcinoma)
+//   @cohort      cohort key, e.g. "TCGA-BRCA"
+//   @value_field vector field, e.g. "values_tpm" (GDC) or "values_ebpp" (PanCanAtlas)
+// Returns one document per sample: {sample, values: [[entrez_id, value], ...]}
+
+LET direct = (
+  FOR v, e IN 1..1 ANY @seed edges
+    FILTER v.class_code == "EntrezID"
+       AND e.predicate_label IN ["causes or contributes to condition",
+                                 "causally influences", "causally influenced by"]
+    RETURN v.entity_id)
+LET via_disease = (
+  FOR d, e IN 1..1 ANY @seed edges
+    FILTER d.class_code == "MONDO" AND e.predicate_label IN ["has phenotype", "phenotype of"]
+    FOR v, e2 IN 1..1 ANY d edges
+      FILTER v.class_code == "EntrezID"
+         AND e2.predicate_label IN ["causes or contributes to condition",
+                                    "disease has basis in dysfunction of"]
+      RETURN v.entity_id)
+LET targets = UNION_DISTINCT(direct, via_disease)
+
+LET idx = DOCUMENT(CONCAT("GENE_EXPRESSION/expr_index_", @cohort))
+LET pos = (
+  FOR m IN idx.gene_mappings
+    FILTER m.entrez_id IN targets
+    RETURN {entrez_id: m.entrez_id, p: m.position})
+
+FOR s IN GENE_EXPRESSION
+  FILTER s.data_type == "gene_expression_vector" AND s.cohort == @cohort
+  LET vec = s.@value_field          // read the array once per sample
+  RETURN {sample: s.sample_id,
+          values: (FOR x IN pos RETURN [x.entrez_id, vec[x.p]])}

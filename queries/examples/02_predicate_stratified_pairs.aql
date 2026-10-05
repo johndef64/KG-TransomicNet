@@ -1,0 +1,32 @@
+// 02 -- Predicate-stratified gene pairs: genes that share a node through one predicate.
+// Projects the backbone onto one predicate class at a time. With the default
+// parameters the class is pathway participation (Reactome pathway
+// -[has participant]-> gene): two genes form a pair when they participate in the
+// same pathway. Other strata follow by changing the predicate and the classes
+// (e.g. gene -[causes or contributes to condition]-> MONDO disease, with
+// @shared_side = "target").
+// One scan of the edges carrying the predicate (persistent index), grouped by
+// the shared node; small groups only, so that a pair means close proximity.
+//
+// Bind variables
+//   @predicates   e.g. ["has participant"]
+//   @shared_cc    class_code of the shared node, e.g. "R-HSA"
+//   @shared_side  "source" if the shared node is the edge source (pathway ->
+//                 gene), "target" if it is the edge target (gene -> disease)
+//   @min_size, @max_size   bounds on the number of genes of a shared node
+// Returns {shared, a, b}: the shared node and the Entrez IDs of the pair (a < b).
+
+FOR e IN edges
+  FILTER e.predicate_label IN @predicates
+  LET src = DOCUMENT(e._from)
+  LET tgt = DOCUMENT(e._to)
+  LET shared = @shared_side == "source" ? src : tgt
+  LET gene   = @shared_side == "source" ? tgt : src
+  FILTER shared.class_code == @shared_cc AND gene.class_code == "EntrezID"
+  COLLECT node = shared.entity_id INTO members = gene.entity_id
+  LET genes = UNIQUE(members)
+  FILTER LENGTH(genes) >= @min_size AND LENGTH(genes) <= @max_size
+  FOR a IN genes
+    FOR b IN genes
+      FILTER a < b
+      RETURN {shared: node, a, b}

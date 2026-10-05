@@ -1,0 +1,19 @@
+// layer_index -- ordered feature list of one omic layer of one cohort.
+//
+// Reads the cohort index document and returns, position by position, the
+// identifier chosen with @id_field. Combined with layer_vectors.aql it rebuilds
+// the feature x sample matrix of the layer.
+//
+// Bind variables
+//   @index        index handle, e.g. "GENE_EXPRESSION/expr_index_TCGA-BRCA"
+//   @mapping      mapping array field: "gene_mappings" | "mirna_mappings" |
+//                 "protein_mappings" | "probe_mappings"
+//   @id_field     identifier to return, e.g. "gene_id_ensembl", "entrez_id",
+//                 "hgnc_symbol", "source_id" (original row id), "mirna_id"
+// Returns {position, id} sorted by position.
+
+LET idx = DOCUMENT(@index)
+FILTER idx != null
+FOR m IN idx[@mapping]
+  SORT m.position
+  RETURN {position: m.position, id: m[@id_field]}

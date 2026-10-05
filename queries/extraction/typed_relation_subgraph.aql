@@ -1,0 +1,38 @@
+// typed_relation_subgraph -- type-constrained relational subgraph of the backbone.
+//
+// Keeps an edge when the triple (source bioentity_type, predicate_label, target
+// bioentity_type) appears in a routing table, and renames it to the relation
+// name of that entry. Routing on the endpoint types, not on the predicate alone,
+// separates relations that share a label: "molecularly interacts with" is a
+// protein--protein interaction between two proteins and a compound--target
+// relation between a chemical and a protein.
+//
+// Symmetric relations are returned once per unordered pair, without self loops.
+// One scan of the edge collection; the predicate filter uses its persistent index.
+//
+// Bind variables
+//   @routing   list of {src_type, predicate, tgt_type, relation, symmetric}
+//              (see queries/params/typed_relations.json)
+//   @predicates  the distinct predicate labels of @routing (index pre-filter)
+// Returns {relation, head_type, head_id, tail_type, tail_id}, distinct.
+
+FOR e IN edges
+  FILTER e.predicate_label IN @predicates
+  LET s = DOCUMENT(e._from)
+  LET t = DOCUMENT(e._to)
+  FILTER s.entity_id != null AND t.entity_id != null
+  LET r = FIRST(
+    FOR x IN @routing
+      FILTER x.predicate == e.predicate_label
+         AND x.src_type == s.bioentity_type
+         AND x.tgt_type == t.bioentity_type
+      RETURN x)
+  FILTER r != null
+  FILTER NOT r.symmetric OR s.entity_id != t.entity_id
+  LET swap = r.symmetric AND s.entity_id > t.entity_id
+  COLLECT relation = r.relation,
+          head_type = swap ? t.bioentity_type : s.bioentity_type,
+          head_id   = swap ? t.entity_id : s.entity_id,
+          tail_type = swap ? s.bioentity_type : t.bioentity_type,
+          tail_id   = swap ? s.entity_id : t.entity_id
+  RETURN {relation, head_type, head_id, tail_type, tail_id}

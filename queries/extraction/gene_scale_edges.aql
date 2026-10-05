@@ -1,0 +1,32 @@
+// gene_scale_edges -- one-hop edges from a gene panel to higher biological scales.
+//
+// For each gene of the panel, follows the outbound edges whose target class and
+// predicate match one of the requested scales (e.g. gene -> Reactome pathway,
+// gene -> MONDO disease). Edges are admitted by the PAIR (target class,
+// predicate), never by the predicate alone: "participates in" means pathway
+// membership only when the target is a pathway.
+// Rows come out in the stored order of the edge collection (edge key).
+//
+// Bind variables
+//   @panel    list of Entrez IDs (the gene node _key equals its Entrez ID)
+//   @scales   list of {name, target_cc, predicates}, e.g.
+//             [{"name": "pathway", "target_cc": "R-HSA", "predicates": ["participates in"]},
+//              {"name": "disease", "target_cc": "MONDO",
+//               "predicates": ["causes or contributes to condition"]}]
+// Returns {scale, gene, target} (one row per edge).
+
+LET rows = (
+  FOR entrez IN @panel
+    LET g = DOCUMENT(CONCAT("nodes/", entrez))
+    FILTER g != null AND g.class_code == "EntrezID"
+    FOR v, e IN 1..1 OUTBOUND g edges
+      LET sc = FIRST(FOR s IN @scales
+                       FILTER v.class_code == s.target_cc AND e.predicate_label IN s.predicates
+                       RETURN s.name)
+      FILTER sc != null
+      RETURN {scale: sc, gene: g.entity_id, target: v.entity_id,
+              ord: TO_NUMBER(SUBSTRING(e._key, 5))})
+
+FOR r IN rows
+  SORT r.ord
+  RETURN {scale: r.scale, gene: r.gene, target: r.target}

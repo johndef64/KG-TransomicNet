@@ -1,0 +1,37 @@
+// 04 -- Phenotype-anchored gene set and its cohort coverage.
+// Enters the backbone from a phenotype, reaches the genes linked to it causally
+// or through the diseases that present it, and reports for each gene whether the cohort measures it in each layer.
+// The entry point of a phenotype-anchored multi-omic projection.
+//
+// Bind variables
+//   @phenotype   node handle, e.g. "nodes/HP_0003002"
+//   @cohort      cohort key, e.g. "TCGA-BRCA"
+// Returns {entrez_id, label, in_expression, in_cnv, in_methylation}
+
+LET direct = (
+  FOR v, e IN 1..1 ANY @phenotype edges
+    FILTER v.class_code == "EntrezID"
+       AND e.predicate_label IN ["causes or contributes to condition",
+                                 "causally influences", "causally influenced by"]
+    RETURN v.entity_id)
+LET via_disease = (
+  FOR d, e IN 1..1 ANY @phenotype edges
+    FILTER d.class_code == "MONDO" AND e.predicate_label IN ["has phenotype", "phenotype of"]
+    FOR v, e2 IN 1..1 ANY d edges
+      FILTER v.class_code == "EntrezID"
+         AND e2.predicate_label IN ["causes or contributes to condition",
+                                    "disease has basis in dysfunction of"]
+      RETURN v.entity_id)
+LET targets = UNION_DISTINCT(direct, via_disease)
+LET genes = (FOR id IN targets
+  RETURN {entrez_id: id, label: DOCUMENT(CONCAT("nodes/", id)).label})
+
+LET expr = DOCUMENT(CONCAT("GENE_EXPRESSION/expr_index_", @cohort)).gene_mappings[*].entrez_id
+LET cnv  = DOCUMENT(CONCAT("CNV/cnv_index_", @cohort)).gene_mappings[*].entrez_id
+LET meth_ids = DOCUMENT(CONCAT("METHYLATION/methylation_index_", @cohort)).probe_mappings[*].gene_ids[**]
+LET meth = (FOR g IN meth_ids RETURN DOCUMENT("GENES", g).entrez_id)
+
+FOR g IN genes
+  RETURN MERGE(g, {in_expression: g.entrez_id IN expr,
+                   in_cnv: g.entrez_id IN cnv,
+                   in_methylation: g.entrez_id IN meth})

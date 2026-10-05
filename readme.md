@@ -290,6 +290,21 @@ python use_case_N.py --skip-analysis
 
 The classification of output files (R = result, C = plot cache, F = figure) and which files are required by `--skip-analysis` are documented in [use_case_readme.md](use_case_readme.md).
 
+## Query collection
+
+[`queries/`](queries/README.md) collects AQL queries over the database and small
+adapters that export their results as input files for downstream analyses:
+typed-triple TSVs for relational models, per-scale node and edge lists for
+heterogeneous graph builders, and feature x sample omic matrices in the Xena file
+layout. Four short examples show the data model at work; the extraction queries
+are the building blocks. All of them only read the database.
+
+```bash
+python queries/run_query.py queries/examples/03_cross_layer_profile.aql \
+    --set 'entrez="2064"' --set cohort=TCGA-BRCA --limit 5
+python queries/adapters/to_typed_triples.py --out graph.tsv
+```
+
 ## Repository layout
 
 ```

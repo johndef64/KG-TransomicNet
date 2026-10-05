@@ -201,3 +201,6 @@ FOR g IN nodes
 The semantic collections (`nodes`, `edges`) are a stable, reusable layer; the omic
 collections carry the per-sample quantitative evidence in compact vectors; the index
 documents are the bridge between array positions and the entities of the graph.
+
+More queries, and adapters that export task-specific datasets, are in
+[queries/README.md](queries/README.md).

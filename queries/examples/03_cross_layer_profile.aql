@@ -1,0 +1,25 @@
+// 03 -- Cross-layer profile of one gene: CNV, mRNA and protein, sample by sample.
+// One index lookup per layer and a single pass over the samples: the per-gene
+// alignment of three omic layers of the same cohort.
+//
+// Bind variables
+//   @entrez      Entrez ID of the gene, e.g. "2064" (ERBB2)
+//   @cohort      cohort key, e.g. "TCGA-BRCA"
+// Returns {sample, cnv, mrna, protein}; null where a layer lacks the sample or the gene.
+
+LET p_expr = FIRST(FOR m IN DOCUMENT(CONCAT("GENE_EXPRESSION/expr_index_", @cohort)).gene_mappings
+                     FILTER m.entrez_id == @entrez RETURN m.position)
+LET p_cnv  = FIRST(FOR m IN DOCUMENT(CONCAT("CNV/cnv_index_", @cohort)).gene_mappings
+                     FILTER m.entrez_id == @entrez RETURN m.position)
+LET p_prot = FIRST(FOR m IN DOCUMENT(CONCAT("PROTEIN/protein_index_", @cohort)).protein_mappings
+                     FILTER TO_STRING(m.entrez_id) == @entrez AND m.protein_type == "Total"
+                     RETURN m.position)
+
+FOR s IN GENE_EXPRESSION
+  FILTER s.data_type == "gene_expression_vector" AND s.cohort == @cohort
+  LET c = DOCUMENT("CNV", s.sample_id)
+  LET r = DOCUMENT("PROTEIN", s.sample_id)
+  RETURN {sample: s.sample_id,
+          cnv: (c != null AND p_cnv != null) ? c.values_copy_number[p_cnv] : null,
+          mrna: p_expr != null ? s.values_tpm[p_expr] : null,
+          protein: (r != null AND p_prot != null) ? r.values_abundance[p_prot] : null}

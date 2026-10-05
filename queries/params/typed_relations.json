@@ -1,0 +1,24 @@
+{
+  "_comment": "Routing table for extraction/typed_relation_subgraph.aql: molecular core, compound context and disease layer of the backbone. Each entry maps (source bioentity_type, predicate_label, target bioentity_type) to a type-constrained relation name.",
+  "routing": [
+    {"src_type": "protein",  "predicate": "molecularly interacts with",          "tgt_type": "protein",   "relation": "PPI",                  "symmetric": true},
+    {"src_type": "protein",  "predicate": "participates in",                     "tgt_type": "go",        "relation": "PROTEIN_GO_PROCESS",   "symmetric": false},
+    {"src_type": "protein",  "predicate": "has function",                        "tgt_type": "go",        "relation": "PROTEIN_GO_FUNCTION",  "symmetric": false},
+    {"src_type": "protein",  "predicate": "located_in",                          "tgt_type": "go",        "relation": "PROTEIN_GO_COMPONENT", "symmetric": false},
+    {"src_type": "protein",  "predicate": "participates in",                     "tgt_type": "pathway",   "relation": "PROTEIN_PATHWAY",      "symmetric": false},
+    {"src_type": "gene",     "predicate": "has gene product",                    "tgt_type": "protein",   "relation": "GENE_PRODUCT",         "symmetric": false},
+    {"src_type": "chemical", "predicate": "molecularly interacts with",          "tgt_type": "protein",   "relation": "CPI_BIOCHEM",          "symmetric": false},
+    {"src_type": "chemical", "predicate": "molecularly interacts with",          "tgt_type": "go",        "relation": "COMPOUND_GO",          "symmetric": false},
+    {"src_type": "chemical", "predicate": "participates in",                     "tgt_type": "pathway",   "relation": "COMPOUND_PATHWAY",     "symmetric": false},
+    {"src_type": "chemical", "predicate": "is substance that treats",            "tgt_type": "disease",   "relation": "TREATS",               "symmetric": false},
+    {"src_type": "gene",     "predicate": "participates in",                     "tgt_type": "pathway",   "relation": "GENE_PATHWAY",         "symmetric": false},
+    {"src_type": "gene",     "predicate": "causes or contributes to condition",  "tgt_type": "disease",   "relation": "GDA",                  "symmetric": false},
+    {"src_type": "disease",  "predicate": "disease has basis in dysfunction of", "tgt_type": "gene",      "relation": "GDA_DYSFUNCTION",      "symmetric": false},
+    {"src_type": "disease",  "predicate": "has phenotype",                       "tgt_type": "phenotype", "relation": "DISEASE_PHENOTYPE",    "symmetric": false}
+  ],
+  "predicates": [
+    "molecularly interacts with", "participates in", "has function", "located_in",
+    "has gene product", "is substance that treats", "causes or contributes to condition",
+    "disease has basis in dysfunction of", "has phenotype"
+  ]
+}

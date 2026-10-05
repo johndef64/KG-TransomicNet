@@ -1,0 +1,26 @@
+// labelled_cohort -- samples profiled on expression, CNV and miRNA that also carry a label.
+//
+// The multi-omic cohort of a supervised task: the intersection of the three
+// layers of a cohort, restricted to the samples with a label. Pass
+// @label_field = null to skip the label condition.
+//
+// Bind variables
+//   @cohort       cohort key
+//   @label_field  label attribute on SAMPLES, or null
+// Returns {sample_id, label} sorted by sample.
+
+LET expr = (FOR d IN GENE_EXPRESSION
+              FILTER d.cohort == @cohort AND d.data_type == "gene_expression_vector"
+              RETURN d.sample_id)
+LET cnv  = (FOR d IN CNV
+              FILTER d.cohort == @cohort AND d.data_type == "cnv_vector"
+              RETURN d.sample_id)
+LET mir  = (FOR d IN MIRNA
+              FILTER d.cohort == @cohort AND d.data_type == "mirna_vector"
+              RETURN d.sample_id)
+
+FOR sid IN INTERSECTION(expr, cnv, mir)
+  LET label = @label_field == null ? null : DOCUMENT("SAMPLES", sid)[@label_field]
+  FILTER @label_field == null OR label != null
+  SORT sid
+  RETURN {sample_id: sid, label}

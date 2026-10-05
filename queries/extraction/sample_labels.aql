@@ -1,0 +1,11 @@
+// sample_labels -- a sample-level label stored on the SAMPLES documents of a cohort.
+//
+// Bind variables
+//   @cohort       cohort key stored on the sample documents
+//   @label_field  attribute holding the label, e.g. "icluster_k28", "sample_type"
+// Returns {sample_id, label} for the samples that carry the label.
+
+FOR s IN SAMPLES
+  FILTER s.cohort == @cohort AND s[@label_field] != null
+  SORT s._key
+  RETURN {sample_id: s._key, label: s[@label_field]}

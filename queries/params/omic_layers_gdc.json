@@ -1,0 +1,16 @@
+{
+  "_comment": "Layer layout for adapters/to_omic_matrices.py on a GDC cohort (set --cohort, e.g. TCGA-BRCA). Ensembl gene IDs with version as row identifiers, as in the GDC files.",
+  "cohort": "TCGA-BRCA",
+  "layers": [
+    {"file": "star_tpm.tsv.gz", "collection": "GENE_EXPRESSION", "data_type": "gene_expression_vector",
+     "index": "GENE_EXPRESSION/expr_index_{cohort}", "mapping": "gene_mappings",
+     "id_field": "gene_id_ensembl", "value_field": "values_tpm", "header": "Ensembl_ID"},
+    {"file": "gene-level_ascat3.tsv.gz", "collection": "CNV", "data_type": "cnv_vector",
+     "index": "CNV/cnv_index_{cohort}", "mapping": "gene_mappings",
+     "id_field": "gene_id_ensembl", "value_field": "values_copy_number", "header": "Ensembl_ID"},
+    {"file": "mirna.tsv.gz", "collection": "MIRNA", "data_type": "mirna_vector",
+     "index": "MIRNA/mirna_index_{cohort}", "mapping": "mirna_mappings",
+     "id_field": "mirna_id", "value_field": "values_expression", "header": "miRNA_ID"}
+  ],
+  "labels": null
+}

@@ -1,0 +1,15 @@
+// layer_vectors -- per-sample vectors of one omic layer of one cohort.
+//
+// Bind variables
+//   @@collection  GENE_EXPRESSION | CNV | MIRNA | PROTEIN | METHYLATION
+//   @cohort       cohort key, e.g. "TCGA-BRCA"
+//   @data_type    e.g. "gene_expression_vector", "cnv_vector", "mirna_vector"
+//   @value_field  e.g. "values_tpm", "values_copy_number", "values_expression"
+//   @positions    null for the whole vector, or a list of positions to slice
+// Returns {sample_id, values}.
+
+FOR d IN @@collection
+  FILTER d.cohort == @cohort AND d.data_type == @data_type
+  LET vec = d.@value_field          // read the array once per sample
+  RETURN {sample_id: d.sample_id,
+          values: @positions == null ? vec : (FOR p IN NOT_NULL(@positions, []) RETURN vec[p])}

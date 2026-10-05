@@ -1,0 +1,22 @@
+// ontology_closure -- hierarchy edges among a given set of ontology terms.
+//
+// Closes an ontology scale under its hierarchical predicates ("type", i.e. is_a
+// between two terms of the same class, and "part_of"), restricted to the terms
+// passed in: only edges whose two endpoints are both in @terms are returned.
+//
+// Bind variables
+//   @terms                   list of term IDs (node _key), e.g. ["GO_0008150", ...]
+//   @class_code              e.g. "GO"
+//   @hierarchy_predicates    e.g. ["type", "part_of"]
+// Returns {src, dst}, distinct, no self loops.
+
+FOR term IN @terms
+  LET n = DOCUMENT(CONCAT("nodes/", term))
+  FILTER n != null AND n.class_code == @class_code
+  FOR v, e IN 1..1 OUTBOUND n edges
+    FILTER e.predicate_label IN @hierarchy_predicates
+       AND v.class_code == @class_code
+       AND v.entity_id IN @terms
+       AND v.entity_id != n.entity_id
+    COLLECT src = n.entity_id, dst = v.entity_id
+    RETURN {src, dst}

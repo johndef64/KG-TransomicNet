@@ -1,0 +1,17 @@
+{
+  "_comment": "Layer layout for adapters/to_omic_matrices.py on the PanCanAtlas view (cohort PANCAN-ATLAS). Each layer is written as a feature x sample matrix with the original row identifiers (source_id / mirna_id) and the header of the distributed file, so that downstream preprocessing reads it as it would read the original download.",
+  "cohort": "PANCAN-ATLAS",
+  "layers": [
+    {"file": "expression.tsv.gz", "collection": "GENE_EXPRESSION", "data_type": "gene_expression_vector",
+     "index": "GENE_EXPRESSION/expr_index_{cohort}", "mapping": "gene_mappings",
+     "id_field": "source_id", "value_field": "values_ebpp", "header": "sample"},
+    {"file": "cnv.tsv.gz", "collection": "CNV", "data_type": "cnv_vector",
+     "index": "CNV/cnv_index_{cohort}", "mapping": "gene_mappings",
+     "id_field": "source_id", "value_field": "values_copy_number", "header": "Sample"},
+    {"file": "mirna.tsv.gz", "collection": "MIRNA", "data_type": "mirna_vector",
+     "index": "MIRNA/mirna_index_{cohort}", "mapping": "mirna_mappings",
+     "id_field": "mirna_id", "value_field": "values_expression", "header": "sample"}
+  ],
+  "labels": {"file": "clinical.tsv.gz", "label_field": "icluster_k28",
+             "columns": ["sample", "icluster_cluster_assignment"]}
+}
